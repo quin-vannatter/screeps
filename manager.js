@@ -36,23 +36,29 @@ Manager.prototype = {
     // Allows services to be registered.
     registerServices: function(services) {
         services.forEach(service =>  this[service.name] = service);
-    }
+    },
+
+    requestWork: () => false
 };
 
 // Manager Container
 function ManagerContainer(managers) {
+    this.name = ManagerContainer.name;
     this.managers = managers;
 }
 
 ManagerContainer.prototype = {
     init: function() {
-        this.managers.forEach(manager => manager.registerServices(this.managers));
+        this.managers.forEach(manager => manager.registerServices([...this.managers, this]));
         this.managers.forEach(manager => manager.init());
     },
     run: function() {
         this.managers.forEach(manager => manager.load());
         this.managers.forEach(manager => manager.run());
         this.managers.forEach(manager => manager.save());
+    },
+    getAll: function(caller) {
+        return this.managers.filter(manager => manager != caller);
     }
 }
 

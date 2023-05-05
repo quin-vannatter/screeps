@@ -14,56 +14,79 @@ TaskManager.prototype = {
         this.tasks = this.fromMemory(this.m.tasks);
     },
     run: function() {
-        const idleCreeps = Object.values(Game.creeps).filter(creep => !this.tasks.some(task => task.worker.id === creep.id));
+        const idleCreeps = this.getIdleCreeps();
 
         // Purge tasks that don't have a destination.
-        this.tasks = this.tasks.filter(task => task.destination != undefined && task.destination.id != undefined);
         let noCreepAvailable = true;
+        const assignedCreeps = [];
+        this.tasks = this.tasks.sort((a, b) => a.priority - b.priority);
         this.queuedTasks().forEach(task => {
             const creeps = idleCreeps.filter(creep => 
-                task.bodyParts.every(part => creep.body.filter(x => x.hits > 0).some(x => x.type == part)));
-            
+                !assignedCreeps.some(x => x.id == creep.id) &&
+                task.hasBodyParts(creep));
+
             if (creeps.length > 0) {
-                noCreepAvailable = false;
-                const creep = creeps.filter(creep => task.meetsRequirements(creep, task.destination));
+                const creep = creeps.find(creep => task.meetsRequirements(creep, task.destination));
                 if (creep != undefined) {
+                    noCreepAvailable = false;
+                    console.log(`${creep} assigned task ${task.name}`)
                     task.assign(creep);
+                    assignedCreeps.push(creep);
                 } else {
-                    this.submitTasks(task.getTasksForRequirements(creeps[0], task.destination));
+                    noCreepAvailable = false;
+                    const newTasks = task.getTasksForRequirements(creep, task.destination);
+                    if (newTasks.length > 0) {
+                        console.log(`No creeps meet requirements for ${task.name}. Creating tasks to meet requirements`);
+                        this.submitTasks(newTasks, true);
+                    }
                 }
             }
         });
+
+        if (idleCreeps.length != assignedCreeps.length) {
+            console.log("There are creeps idle, requesting work.");
+            const remainingCreeps = idleCreeps.filter(creep => !assignedCreeps.some(x => x.id === creep.id));
+            const managers = this.ManagerContainer.getAll(this);
+            remainingCreeps.forEach(creep => {
+                const workFound = managers.some(manager => manager.requestWork(creep));
+                if (workFound) {
+                    console.log(`Found work for idle creep ${creep.name}`);
+                } else {
+                    if (creep.memory.inactiveTicks == undefined) {
+                        creep.memory.inactiveTicks = 0;
+                    }
+                    creep.inactiveTicks++;
+                }
+            });
+        }
 
         // Get queued tasks that haven't been assigned and create creeps.
         if (noCreepAvailable) {
             this.SpawnManager.requestCreep(this.queuedTasks());
         }
 
-        this.activeTasks().forEach(tasks => {
-            if (tasks.length > 0) {
-                const task = tasks[0];
-                if (!task.isComplete()) {
-                    task.inRange = task.inRange || task.worker.pos.inRangeTo(task.destination, task.range);
-                    if (!task.inRange) {
-                        task.worker.moveTo(task.destination);
-                    } else {
-                        if (task.execute() == ERR_NOT_IN_RANGE) {
-                            task.inRange = false;
-                        };
-                    }
+        this.activeTasks().forEach(task => {
+            if (!task.isComplete()) {
+                task.inRange = task.inRange || (task.destination.id != undefined && task.worker.pos.inRangeTo(task.destination, task.range)) || task.destination.id == undefined;
+                if (!task.inRange) {
+                    task.worker.moveTo(task.destination);
                 } else {
-                    tasks.shift();
+                    const result = task.execute();
+                    if (result == ERR_NOT_IN_RANGE) {
+                        task.inRange = false;
+                    } else if(result != OK) {
+                        task.unassign();
+                    }
                 }
             }
         });
-        this.tasks = this.tasks.filter(task => task.length > 0);
+        this.tasks = this.tasks.filter(task => (task.worker.id == undefined || !task.isComplete()) && task.destination.pos != undefined);
     },
     save: function() {
 
         // Convert current data to memory safe values.
-        //this.m.tasks = this.toMemory(this.tasks);
+        this.m.tasks = this.toMemory(this.tasks);
     },
-
     fromMemory: function(rawTasks) {
         return rawTasks != undefined ? 
             rawTasks.map(rawTask => {
@@ -77,14 +100,19 @@ TaskManager.prototype = {
     toMemory: function(tasks) {
         return tasks.map(task => task.toMemory()).filter(task => task != undefined);
     },
-    getAndSubmit: function(name, options) {
-        this.submitTask(this.getTask(name, options));
+    getIdleCreeps: function() {
+        return Object.values(Game.creeps).filter(creep => !this.tasks.some(task => task.worker.id === creep.id));
+    },
+    getAndSubmitTask: function(name, options, allowDuplicateTasks) {
+        this.submitTask(this.getTask(name, options), allowDuplicateTasks);
     },
     submitTasks: function(tasks, allowDuplicateTasks) {
         tasks.forEach(task => this.submitTask(task, allowDuplicateTasks));
     },
     submitTask: function(task, allowDuplicateTasks) {
-        if (!this.taskExists(task) || allowDuplicateTasks) {
+        const exists = this.taskExists(task);
+        if (!exists || (allowDuplicateTasks && this.meetsThreshold(task))) {
+            console.log(`Task queued: ${task.name}`)
             this.tasks.push(task);
         }
     },
@@ -94,8 +122,10 @@ TaskManager.prototype = {
             return baseTask.create(options);
         }
     },
+    meetsThreshold: function(task) {
+        return this.tasks.filter(x => x.name === task.name && task.destination.id === x.destination.id).length <= Object.keys(Game.creeps).length;
+    },
     taskExists: function(task) {
-        console.log(task)
         return this.tasks.some(x => x.name === task.name && task.destination.id === x.destination.id);
     },
     registerTask: function(name, options) {
@@ -138,15 +168,14 @@ Task.prototype = {
         range: 1,
         inRange: false,
         priority: 0,
-        getTasksForRequirementsFunction: () => [],
-        triggerCompleteFunction: () => {}
+        getTasksForRequirementsFunction: () => []
     },
     create: function(options) {
         const task = new Task(
             this.name,
             this
         );
-        Object.keys(options).filter(key => !this.STATIC_PROPERTIES.includes(key)).forEach(key => task[key] = options[key]);
+        Object.keys(options || {}).filter(key => !this.STATIC_PROPERTIES.includes(key)).forEach(key => task[key] = options[key]);
         return task;
     },
     unassign: function() {
@@ -169,12 +198,13 @@ Task.prototype = {
         return this.create({ ...this.DEFAULT_PROPERTIES, ...options });
     },
     toMemory: function() {
-        return this.getSaveableProperties().map(key => {
+        const value = this.getSaveableProperties().map(key => {
             if (typeof(this[key]) == "object" && this[key] != undefined) {
                 return this[key].id
             }
             return this[key];
         });
+        return value;
     },
     getSaveableProperties: function() {
         return Object.keys(this).filter(key => !this.STATIC_PROPERTIES.includes(key))
@@ -185,8 +215,14 @@ Task.prototype = {
                 return a < b ? -1 : 1;
             });
     },
+    hasBodyParts: function(creep) {
+        return this.bodyParts.every(bodyPart => creep.body.filter(x => x.hits > 0).some(x => x.type === bodyPart));
+    },
     meetsRequirements: function(creep) {
-        return this.meetsRequirementsFunction(creep, this.destination);
+        return this.hasBodyParts(creep) && this.meetsRequirementsFunction(creep, this.destination);
+    },
+    getTasksForRequirements: function(creep) {
+        return this.getTasksForRequirementsFunction(creep, this.destination);
     },
     execute: function() {
         return this.executeFunction(this.worker, this.destination);

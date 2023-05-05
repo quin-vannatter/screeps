@@ -1,12 +1,9 @@
 const { Manager } = require("./manager");
 
 const NAMES = [
-    "BustaBitch",
     "Gibbs",
     "Bellerieve",
-    "E-Rock",
     "Erik",
-    "BellaBitch",
     "Duke",
     "Dylan",
     "Yanisin"
@@ -31,11 +28,11 @@ SpawnManager.prototype = {
             tasks = [];
             groupedTasks.forEach(taskGroup => {
                 if(!this.requestCreepForTasks(taskGroup)) {
-                    tasks = tasks.concat(taskGroupGroup);
+                    tasks = tasks.concat(taskGroup);
                 }
             });
             groupingSize--;
-        } while(!taskGroups.length > 0 && groupingSize >= 1)
+        } while(!tasks.length > 0 && groupingSize >= 1)
     },
     // Returns true if a creep can be spawned or if a spawn has the capacity to spawn a creep.
     requestCreepForTasks: function(tasks) {
@@ -50,12 +47,17 @@ SpawnManager.prototype = {
             } else {
                 const validSpawns = spawns.filter(spawn => spawn.store.getCapacity(RESOURCE_ENERGY) >= creepCost);
                 if (validSpawns.length > 0) {
-                    validSpawns.forEach(this.TaskManager.getAndSubmit("depositEnergy", validSpawn));
+                    validSpawns.forEach(validSpawn => this.TaskManager.getAndSubmitTask("depositEnergy", { destination: validSpawn }));
                     return true;
                 }
+                const lowEnergySpawns = spawns.filter(spawn => spawn.store.getCapacity(RESOURCE_ENERGY) < creepCost);
+                lowEnergySpawns.forEach(spawn => this.StructureManager.buildCloseTo(spawn, STRUCTURE_CONTAINER));
             }
         }
         return false;
+    },
+    requestWork: function() {
+        Object.values(Game.spawns).forEach(spawn => this.StructureManager.buildCloseTo(spawn, STRUCTURE_CONTAINER));
     },
     getRequiredBodyParts: function(tasks) {
         const requiredBodyParts = tasks.map(task => task.bodyParts)
@@ -79,7 +81,8 @@ SpawnManager.prototype = {
         }, new Array(Math.floor(tasks.length / groupSize)).fill([]))
     },
     getClosestSpawn: function(tasks) {
-        return tasks.map(task => task.destination.pos.findClosestByPath(FIND_MY_SPAWNS)).reduce((a, b) => {
+        return tasks.filter(task => task.destination.pos != undefined)
+            .map(task => task.destination.pos.findClosestByPath(FIND_MY_SPAWNS)).reduce((a, b) => {
             if (b != null) {
                 let entry = a.find(x => x.value.id == b.id);
                 if (entry == undefined) {
