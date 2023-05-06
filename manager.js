@@ -3,19 +3,6 @@
 // Manager.
 function Manager(name) {
     this.name = name;
-
-    // Defines a quick access way to get memory.
-    Object.defineProperty(this, "m", {
-        get: function() {
-            if (Memory.Manager == undefined) {
-                Memory.Manager = {};
-            }
-            if (Memory.Manager[this.name] == undefined) {
-                Memory.Manager[this.name] = {};
-            }
-            return Memory.Manager[this.name];
-        }
-    });
 }
 
 Manager.prototype = {
@@ -24,18 +11,16 @@ Manager.prototype = {
     // Called once, services registered at this point.
     init: () => {},
 
-    // Load data from memory and initial setup.
-    load: () => {},
+    // Managers are in a useable state here but no data loaded.
+    afterInit: () => {},
 
     // Bulk work of the manager.
     run: () => {},
 
-    // Save the data to memory.
-    save: () => {},
-
     // Allows services to be registered.
-    registerServices: function(services) {
-        services.forEach(service =>  this[service.name] = service);
+    registerManagers: function(managers) {
+        this.managers = managers
+        managers.forEach(manager =>  this[manager.name] = service);
     },
 
     requestWork: () => false
@@ -49,13 +34,13 @@ function ManagerContainer(managers) {
 
 ManagerContainer.prototype = {
     init: function() {
-        this.managers.forEach(manager => manager.registerServices([...this.managers, this]));
+        this.managers.forEach(manager => manager.registerManagers([...this.managers, this]));
         this.managers.forEach(manager => manager.init());
     },
     run: function() {
-        this.managers.forEach(manager => manager.load());
+        this.MemoryManager.load();
         this.managers.forEach(manager => manager.run());
-        this.managers.forEach(manager => manager.save());
+        this.MemoryManager.save();
     },
     getAll: function(caller) {
         return this.managers.filter(manager => manager != caller);

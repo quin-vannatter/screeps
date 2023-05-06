@@ -6,21 +6,13 @@ function StructureManager() {
 
 StructureManager.prototype = {
     ...Manager.prototype,
-    init: function() {
-        this.TaskManager.registerTasks({
+    afterInit: function() {
+        this.TaskManager.taskCollection.register({
             buildStructure: {
-                executeFunction: (creep, destination) => {
-                    return creep.build(destination);
-                },
-                meetsRequirementsFunction: (creep, destination) => {
-                    return creep.store[RESOURCE_ENERGY] > 0;
-                },
-                isCompleteFunction: (creep, destination) => {
-                    return destination.progressTotal == destination.progress;
-                },
-                getTasksForRequirementsFunction: (creep, destination) => {
-                    return [this.CreepManager.getHarvestClosestSourceTask(destination)];
-                },
+                executeFunction: () => this.creep.build(this.destination),
+                meetsRequirements: creep => creep.store[RESOURCE_ENERGY] > 0,
+                isCompleteFunction: () => this.destination.progressTotal == this.destination.progress,
+                getTasksForRequirements: () => [this.CreepManager.getHarvestClosestSourceTask(this.destination)],
                 bodyParts: [WORK, CARRY],
                 range: 3,
                 priority: 2 

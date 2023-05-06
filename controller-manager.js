@@ -6,26 +6,18 @@ function ControllerManager() {
 
 ControllerManager.prototype = {
     ...Manager.prototype,
-    init: function() {
+    afterInit: function() {
         this.TaskManager.registerTasks({
             updateController: {
-                executeFunction: (creep, destination) => {
-                    return creep.upgradeController(destination);
-                },
-                meetsRequirementsFunction: (creep, destination) => {
-                    return creep.store[RESOURCE_ENERGY] > 0;
-                },
-                getTasksForRequirementsFunction: (creep, destination) => {
-                    return [this.CreepManager.getHarvestClosestSourceTask(destination)];
-                },
-                isCompleteFunction: (creep, destination) => {
-                    return creep.store[RESOURCE_ENERGY] == 0 || (destination.store != undefined && destination.store.getFreeCapacity(RESOURCE_ENERGY) == 0);
-                },
+                execute: () => this.creep.upgradeController(destination),
+                meetsRequirements: creep => creep.store[RESOURCE_ENERGY] > 0,
+                getTasksForRequirements: () => [this.CreepManager.getHarvestClosestSourceTask(this.destination)],
+                isComplete: () => this.creep.store[RESOURCE_ENERGY] == 0 || (this.destination.store != undefined && this.destination.store.getFreeCapacity(RESOURCE_ENERGY) == 0),
+                priority: 1,
                 bodyParts: [
                     WORK,
                     CARRY
-                ],
-                priority: 1
+                ]
             }
         });
     },

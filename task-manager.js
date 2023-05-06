@@ -3,17 +3,26 @@ const { Manager } = require("./manager");
 // Task Manager. Should be loaded last so all tasks can be registered.
 function TaskManager() {
     Manager.call(this, TaskManager.name);
-    this.taskMap = {};
 }
 
 TaskManager.prototype = {
     ...Manager.prototype,
-    load: function() {
-        // Since the task manager is last to be loaded, if any other manager has tasks to be registered, they should be in the task map.
-        // Load the queued and active tasks.
-        this.tasks = this.fromMemory(this.m.tasks);
+    init: function() {
+        this.taskCollection = this.MemoryManager.register("tasks", {
+            worker: {},
+            destination: {},
+            range: 1,
+            inRange: false,
+            priority: 0,
+            getTasksForRequirementsFunction: () => [],
+            assign: worker => this.worker = worker,
+            unassign: () => delete this.worker,
+            hasBodyParts: creep => this.bodyParts.every(bodyPart => creep.body.filter(x => x.hits > 0).some(x => x.type === bodyPart)),
+            canExecute: creep => this.hasBodyParts(creep) && this.meetsRequirements(creep)
+        });
     },
     run: function() {
+        this.tasks = this.taskCollection.entries;
         const idleCreeps = this.getIdleCreeps();
 
         // Purge tasks that don't have a destination.
@@ -26,7 +35,7 @@ TaskManager.prototype = {
                 task.hasBodyParts(creep));
 
             if (creeps.length > 0) {
-                const creep = creeps.find(creep => task.meetsRequirements(creep, task.destination));
+                const creep = creeps.find(creep => task.canExecute(creep));
                 if (creep != undefined) {
                     noCreepAvailable = false;
                     console.log(`${creep} assigned task ${task.name}`)
@@ -34,7 +43,7 @@ TaskManager.prototype = {
                     assignedCreeps.push(creep);
                 } else {
                     noCreepAvailable = false;
-                    const newTasks = task.getTasksForRequirements(creep, task.destination);
+                    const newTasks = task.getTasksForRequirements(creep);
                     if (newTasks.length > 0) {
                         console.log(`No creeps meet requirements for ${task.name}. Creating tasks to meet requirements`);
                         this.submitTasks(newTasks, true);
@@ -80,25 +89,9 @@ TaskManager.prototype = {
                 }
             }
         });
-        this.tasks = this.tasks.filter(task => (task.worker.id == undefined || !task.isComplete()) && task.destination.pos != undefined);
-    },
-    save: function() {
 
-        // Convert current data to memory safe values.
-        this.m.tasks = this.toMemory(this.tasks);
-    },
-    fromMemory: function(rawTasks) {
-        return rawTasks != undefined ? 
-            rawTasks.map(rawTask => {
-                const taskMap = this.taskMap[rawTask[0]];
-                if (taskMap != undefined) {
-                    const value = taskMap.fromMemory(rawTask);
-                    return value;
-                }
-            }).filter(task => task != undefined) : [];
-    },
-    toMemory: function(tasks) {
-        return tasks.map(task => task.toMemory()).filter(task => task != undefined);
+        this.tasks = this.tasks.filter(task => (task.worker.id == undefined || !task.isComplete()) && task.destination.pos != undefined);
+        this.taskCollection.entries = tasks;
     },
     getIdleCreeps: function() {
         return Object.values(Game.creeps).filter(creep => !this.tasks.some(task => task.worker.id === creep.id));
@@ -117,25 +110,13 @@ TaskManager.prototype = {
         }
     },
     getTask: function(name, options) {
-        const baseTask = this.taskMap[name];
-        if (baseTask != undefined) {
-            return baseTask.create(options);
-        }
+        return this.taskCollection.create(name, options);
     },
     meetsThreshold: function(task) {
         return this.tasks.filter(x => x.name === task.name && task.destination.id === x.destination.id).length <= Object.keys(Game.creeps).length;
     },
     taskExists: function(task) {
         return this.tasks.some(x => x.name === task.name && task.destination.id === x.destination.id);
-    },
-    registerTask: function(name, options) {
-        this.taskMap[name] = new Task(name, options);
-    },
-    registerTasks: function(tasks) {
-        Object.keys(tasks).forEach(key => {
-            const entry = tasks[key];
-            this.taskMap[key] = new Task(key, entry);
-        });
     },
     queuedTasks: function() {
         return this.tasks.filter(task => task.worker.id == undefined);
@@ -145,94 +126,6 @@ TaskManager.prototype = {
     }
 }
 
-// Task.
-// Every task function should assume the creep is already at the location.
-function Task(name, options) {
-    options = { ...this.DEFAULT_PROPERTIES, ...options };
-    Object.keys(options).forEach(key => this[key] = options[key]);
-    this.name = name;
-}
-
-Task.prototype = {
-    STATIC_PROPERTIES: [
-        "executeFunction",
-        "meetsRequirementsFunction",
-        "getTasksForRequirementsFunction",
-        "isCompleteFunction",
-        "bodyParts",
-        "priority"
-    ],
-    DEFAULT_PROPERTIES: {
-        worker: {},
-        destination: {},
-        range: 1,
-        inRange: false,
-        priority: 0,
-        getTasksForRequirementsFunction: () => []
-    },
-    create: function(options) {
-        const task = new Task(
-            this.name,
-            this
-        );
-        Object.keys(options || {}).filter(key => !this.STATIC_PROPERTIES.includes(key)).forEach(key => task[key] = options[key]);
-        return task;
-    },
-    unassign: function() {
-        this.worker = this.DEFAULT_PROPERTIES.worker;
-    },
-    assign: function(worker) {
-        this.worker = worker;
-    },
-    fromMemory: function(data) {
-        const options = this.getSaveableProperties().map((x ,i) => [x, i]).reduce((a, b) => {
-            let value = data[b[1]];
-            if (/[a-f0-9]{15}/.test(value)) {
-                value = Game.getObjectById(value);
-            }
-            return value != undefined ? {
-                ...a,
-                [b[0]]: value
-            } : a;
-        }, {});
-        return this.create({ ...this.DEFAULT_PROPERTIES, ...options });
-    },
-    toMemory: function() {
-        const value = this.getSaveableProperties().map(key => {
-            if (typeof(this[key]) == "object" && this[key] != undefined) {
-                return this[key].id
-            }
-            return this[key];
-        });
-        return value;
-    },
-    getSaveableProperties: function() {
-        return Object.keys(this).filter(key => !this.STATIC_PROPERTIES.includes(key))
-            .sort((a, b) => {
-                if (a === "name" || b === "name") {
-                    return a === "name" ? -1 : 1;
-                }
-                return a < b ? -1 : 1;
-            });
-    },
-    hasBodyParts: function(creep) {
-        return this.bodyParts.every(bodyPart => creep.body.filter(x => x.hits > 0).some(x => x.type === bodyPart));
-    },
-    meetsRequirements: function(creep) {
-        return this.hasBodyParts(creep) && this.meetsRequirementsFunction(creep, this.destination);
-    },
-    getTasksForRequirements: function(creep) {
-        return this.getTasksForRequirementsFunction(creep, this.destination);
-    },
-    execute: function() {
-        return this.executeFunction(this.worker, this.destination);
-    },
-    isComplete: function() {
-        return this.isCompleteFunction(this.worker, this.destination);
-    }
-}
-
 module.exports = {
-    TaskManager: new TaskManager(),
-    Task
+    TaskManager: new TaskManager()
 }
