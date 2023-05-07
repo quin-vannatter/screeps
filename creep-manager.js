@@ -9,45 +9,53 @@ CreepManager.prototype = {
     afterInit: function() {
         this.TaskManager.taskCollection.register({
             harvestEnergy: {
-                execute: () => this.creep.harvest(this.destination),
-                meetsRequirements: creep => {
-                    const freeCapacity = creep.store.getFreeCapacity(RESOURCE_ENERGY);
-                    return freeCapacity > 0 || freeCapacity == null;
-                },
-                isComplete: () => this.creep.store.getFreeCapacity(RESOURCE_ENERGY) == 0,
-                bodyParts: [
-                    WORK
-                ]
+                template: {
+                    execute: self => self.creep.harvest(self.destination),
+                    canExecute: (self, creep) => {
+                        const freeCapacity = creep.store.getFreeCapacity(RESOURCE_ENERGY);
+                        return freeCapacity > 0 || freeCapacity == null;
+                    },
+                    isComplete: self => self.creep.store.getFreeCapacity(RESOURCE_ENERGY) == 0,
+                    bodyParts: [
+                        WORK
+                    ]
+                }
             },
             fetchDroppedResource: {
-                execute: () => this.creep.pickup(this.destination),
-                meetsRequirements: creep => {
-                    const freeCapacity = creep.store.getFreeCapacity(RESOURCE_ENERGY);
-                    return freeCapacity > 0 || freeCapacity == null;
-                },
-                isComplete: () => this.creep.store.getFreeCapacity(this.destination.resourceType) == 0 || this.destination == undefined || this.destination.amount == 0,
-                bodyParts: [
-                    CARRY
-                ]
+                template: {
+                    execute: self => self.creep.pickup(self.destination),
+                    canExecute: (self, creep) => {
+                        const freeCapacity = creep.store.getFreeCapacity(RESOURCE_ENERGY);
+                        return freeCapacity > 0 || freeCapacity == null;
+                    },
+                    isComplete: self => self.creep.store.getFreeCapacity(self.destination.resourceType) == 0 || self.destination == undefined || self.destination.amount == 0,
+                    bodyParts: [
+                        CARRY
+                    ]
+                }
             },
             depositEnergy: {
-                execute: () => this.creep.transfer(this.destination, RESOURCE_ENERGY),
-                meetsRequirements: creep => creep.store[RESOURCE_ENERGY] > 0,
-                getTasksForRequirements: () => [this.CreepManager.getHarvestClosestSourceTask(this.destination)],
-                isCompleteFunction: () => this.creep.store[RESOURCE_ENERGY] == 0 || (this.destination.store != undefined && this.destination.store.getFreeCapacity(RESOURCE_ENERGY) == 0),
-                bodyParts: [
-                    CARRY
-                ]
+                template: {
+                    execute: () => this.creep.transfer(this.destination, RESOURCE_ENERGY),
+                    canExecute: creep => creep.store[RESOURCE_ENERGY] > 0,
+                    getTasksForRequirements: () => [this.CreepManager.getHarvestClosestSourceTask(this.destination)],
+                    isCompleteFunction: () => this.creep.store[RESOURCE_ENERGY] == 0 || (this.destination.store != undefined && this.destination.store.getFreeCapacity(RESOURCE_ENERGY) == 0),
+                    bodyParts: [
+                        CARRY
+                    ]
+                }
             },
             transferEnergy: {
-                executeFunction: () => this.destination.transfer(this.creep, RESOURCE_ENERGY),
-                meetsRequirementsFunction: () => this.creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
-                getTasksForRequirementsFunction: () => [this.CreepManager.getHarvestClosestSourceTask(this.destination)],
-                isCompleteFunction: () => this.creep.store[RESOURCE_ENERGY] == 0 || (this.destination.store != undefined && this.destination.store.getFreeCapacity(RESOURCE_ENERGY) == 0),
-                bodyParts: [
-                    CARRY,
-                    WORK
-                ]
+                template: {
+                    execute: () => this.destination.transfer(this.creep, RESOURCE_ENERGY),
+                    canExecute: () => this.creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+                    getTasksForRequirements: () => [this.CreepManager.getHarvestClosestSourceTask(this.destination)],
+                    isCompleteFunction: () => this.creep.store[RESOURCE_ENERGY] == 0 || (this.destination.store != undefined && this.destination.store.getFreeCapacity(RESOURCE_ENERGY) == 0),
+                    bodyParts: [
+                        CARRY,
+                        WORK
+                    ]
+                }
             }
         });
     },

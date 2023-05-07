@@ -9,20 +9,23 @@ TaskManager.prototype = {
     ...Manager.prototype,
     init: function() {
         this.taskCollection = this.MemoryManager.register("tasks", {
-            worker: {},
+            creep: {},
             destination: {},
             range: 1,
-            inRange: false,
-            priority: 0,
             getTasksForRequirementsFunction: () => [],
-            assign: worker => this.worker = worker,
-            unassign: () => delete this.worker,
-            hasBodyParts: creep => this.bodyParts.every(bodyPart => creep.body.filter(x => x.hits > 0).some(x => x.type === bodyPart)),
-            canExecute: creep => this.hasBodyParts(creep) && this.meetsRequirements(creep)
+            assign: (self, creep) => self.creep = creep,
+            unassign: self => delete self.creep,
+            hasBodyParts: (self, creep) => self.bodyParts.every(bodyPart => creep.body.filter(x => x.hits > 0).some(x => x.type === bodyPart)),
+            canExecute: (self, creep) => self.hasBodyParts(creep) && self.meetsRequirements(creep)
+        }, {
+            inRange: false,
+            priority: 0
         });
     },
-    run: function() {
+    afterInit: function() {
         this.tasks = this.taskCollection.entries;
+    },
+    run: function() {
         const idleCreeps = this.getIdleCreeps();
 
         // Purge tasks that don't have a destination.
@@ -76,9 +79,9 @@ TaskManager.prototype = {
 
         this.activeTasks().forEach(task => {
             if (!task.isComplete()) {
-                task.inRange = task.inRange || (task.destination.id != undefined && task.worker.pos.inRangeTo(task.destination, task.range)) || task.destination.id == undefined;
+                task.inRange = task.inRange || (task.destination.id != undefined && task.creep.pos.inRangeTo(task.destination, task.range)) || task.destination.id == undefined;
                 if (!task.inRange) {
-                    task.worker.moveTo(task.destination);
+                    task.creep.moveTo(task.destination);
                 } else {
                     const result = task.execute();
                     if (result == ERR_NOT_IN_RANGE) {
@@ -90,11 +93,11 @@ TaskManager.prototype = {
             }
         });
 
-        this.tasks = this.tasks.filter(task => (task.worker.id == undefined || !task.isComplete()) && task.destination.pos != undefined);
+        this.tasks = this.tasks.filter(task => (task.creep.id == undefined || !task.isComplete()) && task.destination.pos != undefined);
         this.taskCollection.entries = tasks;
     },
     getIdleCreeps: function() {
-        return Object.values(Game.creeps).filter(creep => !this.tasks.some(task => task.worker.id === creep.id));
+        return Object.values(Game.creeps).filter(creep => !this.tasks.some(task => task.creep.id === creep.id));
     },
     getAndSubmitTask: function(name, options, allowDuplicateTasks) {
         this.submitTask(this.getTask(name, options), allowDuplicateTasks);
@@ -119,10 +122,10 @@ TaskManager.prototype = {
         return this.tasks.some(x => x.name === task.name && task.destination.id === x.destination.id);
     },
     queuedTasks: function() {
-        return this.tasks.filter(task => task.worker.id == undefined);
+        return this.tasks.filter(task => task.creep.id == undefined);
     },
     activeTasks: function() {
-        return this.tasks.filter(task => task.worker.id != undefined);
+        return this.tasks.filter(task => task.creep.id != undefined);
     }
 }
 

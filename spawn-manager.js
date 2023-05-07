@@ -15,8 +15,6 @@ function SpawnManager(...services) {
 
 SpawnManager.prototype = {
     ...Manager.prototype,
-    load: function () {
-    },
     requestCreep: function (tasks) {
         let groupingSize = tasks.length;
 

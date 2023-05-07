@@ -7,17 +7,21 @@ function ControllerManager() {
 ControllerManager.prototype = {
     ...Manager.prototype,
     afterInit: function() {
-        this.TaskManager.registerTasks({
+        this.TaskManager.taskCollection.register({
             updateController: {
-                execute: () => this.creep.upgradeController(destination),
-                meetsRequirements: creep => creep.store[RESOURCE_ENERGY] > 0,
-                getTasksForRequirements: () => [this.CreepManager.getHarvestClosestSourceTask(this.destination)],
-                isComplete: () => this.creep.store[RESOURCE_ENERGY] == 0 || (this.destination.store != undefined && this.destination.store.getFreeCapacity(RESOURCE_ENERGY) == 0),
-                priority: 1,
-                bodyParts: [
-                    WORK,
-                    CARRY
-                ]
+                template: {
+                    execute: self => self.creep.upgradeController(destination),
+                    meetsRequirements: (self, creep) => creep.store[RESOURCE_ENERGY] > 0,
+                    getTasksForRequirements: self => [this.CreepManager.getHarvestClosestSourceTask(self.destination)],
+                    isComplete: self => self.creep.store[RESOURCE_ENERGY] == 0 || (self.destination.store != undefined && self.destination.store.getFreeCapacity(RESOURCE_ENERGY) == 0),
+                    bodyParts: [
+                        WORK,
+                        CARRY
+                    ]
+                },
+                defaults: {
+                    priority: 1
+                }
             }
         });
     },

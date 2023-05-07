@@ -36,11 +36,10 @@ ManagerContainer.prototype = {
     init: function() {
         this.managers.forEach(manager => manager.registerManagers([...this.managers, this]));
         this.managers.forEach(manager => manager.init());
+        this.managers.forEach(manager => manager.afterInit());
     },
     run: function() {
-        this.MemoryManager.load();
         this.managers.forEach(manager => manager.run());
-        this.MemoryManager.save();
     },
     getAll: function(caller) {
         return this.managers.filter(manager => manager != caller);

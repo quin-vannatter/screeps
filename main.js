@@ -17,4 +17,9 @@ const managerContainer = new ManagerContainer([
 ])
 
 managerContainer.init();
-module.exports.loop = () => managerContainer.run();
+
+module.exports.loop = () => {
+    MemoryManager.load();
+    managerContainer.run();
+    MemoryManager.save();
+};

@@ -9,13 +9,17 @@ StructureManager.prototype = {
     afterInit: function() {
         this.TaskManager.taskCollection.register({
             buildStructure: {
-                executeFunction: () => this.creep.build(this.destination),
-                meetsRequirements: creep => creep.store[RESOURCE_ENERGY] > 0,
-                isCompleteFunction: () => this.destination.progressTotal == this.destination.progress,
-                getTasksForRequirements: () => [this.CreepManager.getHarvestClosestSourceTask(this.destination)],
-                bodyParts: [WORK, CARRY],
-                range: 3,
-                priority: 2 
+                template: {
+                    execute: self => self.creep.build(self.destination),
+                    canExecute: (self, creep) => creep.store[RESOURCE_ENERGY] > 0,
+                    isCompleteFunction: self => self.destination.progressTotal == self.destination.progress,
+                    getTasksForRequirements: self => [this.CreepManager.getHarvestClosestSourceTask(self.destination)],
+                    bodyParts: [WORK, CARRY],
+                    range: 3
+                },
+                defaults: {
+                    priority: 2 
+                }
             }
         });
     },
