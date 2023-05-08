@@ -8,22 +8,21 @@ function TaskManager() {
 TaskManager.prototype = {
     ...Manager.prototype,
     init: function() {
-        this.taskCollection = this.MemoryManager.register("tasks", {
-            creep: {},
-            destination: {},
-            range: 1,
-            getTasksForRequirementsFunction: () => [],
+        this.collection = this.MemoryManager.register("tasks", {
+            abandon: self => self.abandoned = true,
+            getTasksForRequirements: () => [],
             assign: (self, creep) => self.creep = creep,
             unassign: self => delete self.creep,
             hasBodyParts: (self, creep) => self.bodyParts.every(bodyPart => creep.body.filter(x => x.hits > 0).some(x => x.type === bodyPart)),
-            canExecute: (self, creep) => self.hasBodyParts(creep) && self.meetsRequirements(creep)
+            meetsRequirements: (self, creep) => self.hasBodyParts(creep) && self.canExecute(creep)
         }, {
+            abandoned: false,
+            creep: {},
+            destination: {},
+            range: 1,
             inRange: false,
             priority: 0
         });
-    },
-    afterInit: function() {
-        this.tasks = this.taskCollection.entries;
     },
     run: function() {
         const idleCreeps = this.getIdleCreeps();
@@ -31,14 +30,14 @@ TaskManager.prototype = {
         // Purge tasks that don't have a destination.
         let noCreepAvailable = true;
         const assignedCreeps = [];
-        this.tasks = this.tasks.sort((a, b) => a.priority - b.priority);
+        this.collection.entries = this.collection.entries.sort((a, b) => a.priority - b.priority);
         this.queuedTasks().forEach(task => {
             const creeps = idleCreeps.filter(creep => 
                 !assignedCreeps.some(x => x.id == creep.id) &&
                 task.hasBodyParts(creep));
 
             if (creeps.length > 0) {
-                const creep = creeps.find(creep => task.canExecute(creep));
+                const creep = creeps.find(creep => task.meetsRequirements(creep));
                 if (creep != undefined) {
                     noCreepAvailable = false;
                     console.log(`${creep} assigned task ${task.name}`)
@@ -78,26 +77,30 @@ TaskManager.prototype = {
         }
 
         this.activeTasks().forEach(task => {
-            if (!task.isComplete()) {
-                task.inRange = task.inRange || (task.destination.id != undefined && task.creep.pos.inRangeTo(task.destination, task.range)) || task.destination.id == undefined;
-                if (!task.inRange) {
-                    task.creep.moveTo(task.destination);
-                } else {
-                    const result = task.execute();
-                    if (result == ERR_NOT_IN_RANGE) {
-                        task.inRange = false;
-                    } else if(result != OK) {
-                        task.unassign();
+            try {
+                if (!task.isComplete()) {
+                    task.inRange = task.inRange || (task.destination.id != undefined && task.creep.pos.inRangeTo(task.destination, task.range)) || task.destination.id == undefined;
+                    if (!task.inRange) {
+                        task.creep.moveTo(task.destination)
+                    } else {
+                        const result = task.execute();
+                        if (result == ERR_NOT_IN_RANGE) {
+                            task.inRange = false;
+                        } else if(result != OK) {
+                            task.unassign();
+                        }
                     }
                 }
+            } catch {
+                task.abandon();
             }
         });
 
-        this.tasks = this.tasks.filter(task => (task.creep.id == undefined || !task.isComplete()) && task.destination.pos != undefined);
-        this.taskCollection.entries = tasks;
+
+        this.collection.entries = this.collection.entries.filter(task => (task.creep.id == undefined || !task.isComplete()) && task.destination.pos != undefined && !task.abandoned);
     },
     getIdleCreeps: function() {
-        return Object.values(Game.creeps).filter(creep => !this.tasks.some(task => task.creep.id === creep.id));
+        return Object.values(Game.creeps).filter(creep => !this.collection.entries.some(task => task.creep.id === creep.id));
     },
     getAndSubmitTask: function(name, options, allowDuplicateTasks) {
         this.submitTask(this.getTask(name, options), allowDuplicateTasks);
@@ -109,23 +112,24 @@ TaskManager.prototype = {
         const exists = this.taskExists(task);
         if (!exists || (allowDuplicateTasks && this.meetsThreshold(task))) {
             console.log(`Task queued: ${task.name}`)
-            this.tasks.push(task);
+            this.collection.entries.push(task);
         }
     },
-    getTask: function(name, options) {
-        return this.taskCollection.create(name, options);
+    getTask: function(name, data) {
+        const task = this.collection.create(name, data);
+        return task;
     },
     meetsThreshold: function(task) {
-        return this.tasks.filter(x => x.name === task.name && task.destination.id === x.destination.id).length <= Object.keys(Game.creeps).length;
+        return this.collection.entries.filter(x => x.name === task.name && task.destination.id === x.destination.id).length <= Object.keys(Game.creeps).length;
     },
     taskExists: function(task) {
-        return this.tasks.some(x => x.name === task.name && task.destination.id === x.destination.id);
+        return this.collection.entries.some(x => x.name === task.name && task.destination.id === x.destination.id);
     },
     queuedTasks: function() {
-        return this.tasks.filter(task => task.creep.id == undefined);
+        return this.collection.entries.filter(task => task.creep.id == undefined);
     },
     activeTasks: function() {
-        return this.tasks.filter(task => task.creep.id != undefined);
+        return this.collection.entries.filter(task => task.creep.id != undefined);
     }
 }
 

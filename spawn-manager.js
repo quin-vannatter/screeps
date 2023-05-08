@@ -48,14 +48,19 @@ SpawnManager.prototype = {
                     validSpawns.forEach(validSpawn => this.TaskManager.getAndSubmitTask("depositEnergy", { destination: validSpawn }));
                     return true;
                 }
-                const lowEnergySpawns = spawns.filter(spawn => spawn.store.getCapacity(RESOURCE_ENERGY) < creepCost);
-                lowEnergySpawns.forEach(spawn => this.StructureManager.buildCloseTo(spawn, STRUCTURE_CONTAINER));
+                if(spawns.some(spawn => spawn.store.getCapacity(RESOURCE_ENERGY) < creepCost)) {
+                    this.getRoomSources().forEach(source => this.StructureManager.buildCloseTo(source, STRUCTURE_EXTENSION));
+                }
             }
         }
         return false;
     },
+    getRoomSources: function(spawn) {
+        const rooms = spawn ? [spawn.room] : Object.values(Game.rooms)
+        return rooms.map(room => room.find(FIND_SOURCES)).reduce((a, b) => a.concat(b), []);
+    },
     requestWork: function() {
-        Object.values(Game.spawns).forEach(spawn => this.StructureManager.buildCloseTo(spawn, STRUCTURE_CONTAINER));
+        this.getRoomSources().forEach(source => this.StructureManager.buildCloseTo(source, STRUCTURE_EXTENSION));
     },
     getRequiredBodyParts: function(tasks) {
         const requiredBodyParts = tasks.map(task => task.bodyParts)

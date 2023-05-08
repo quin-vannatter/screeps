@@ -2,21 +2,28 @@ const {
     Manager
 } = require("./manager");
 
-function Entry(template, defaults) {
+function Entry(name, template, defaults) {
+    this.name = name;
     this.template = template;
     this.defaults = defaults;
+    this.updateEntry({ ...template, ...defaults });
     this.data = {};
 }
 
 Entry.prototype = {
     create: function (data) {
-        this.data = { ...data, ...this.defaults };
-        const completeData = { ...this.data, ...this.template };
+        const entry = new Entry(this.name, this.template, this.defaults);
+        entry.data = { ...this.defaults, ...data };
+        const completeData = { ...this.template, ...entry.data };
+        entry.updateEntry(completeData);
+        return entry;
+    },
+    updateEntry: function(data) {
         const self = this;
-        Object.keys(completeData).forEach(key => {
-            const value = completeData[key];
+        Object.keys(data).forEach(key => {
+            const value = data[key];
             this[key] = typeof(value) === "function" ? (...args) => value(self, ...args) : value;
-        })
+        });
     },
     fromMemory: function (properties, data) {
         return this.create(properties.map((key, i) => ({ [key]: data[i] })).reduce((a, b) => ({...a, ...b}), {}));
@@ -25,7 +32,7 @@ Entry.prototype = {
         return properties.map(key => this[key]);
     },
     properties: function() {
-        return Object.keys(this.data);
+        return ["name", ...Object.keys(this.data)];
     }
 }
 
@@ -44,33 +51,40 @@ MemoryManager.prototype = {
             Memory.ids = [];
         }
     },
+    clear: function() {
+        Memory.collections = {};
+        Memory.ids = [];
+    },
     load: function () {
         this.setup();
         const memory = Memory.collections;
         const references = Memory.ids.map(id => Game.getObjectById(id));
         Object.keys(this.collections).forEach(key => {
+            const collection = this.collections[key];
+            collection.entries = [];
+            if (memory[key] == undefined) {
+                memory[key] = [];
+            }
             const collectionMemory = memory[key];
             if (collectionMemory.length >= 3) {
-                const name = collectionMemory[0];
-                const properties = collectionMemory[1];
-                const idIndexes = collectionMemory[2];
-                const entries = collectionMemory.slice(3);
+                const properties = collectionMemory[0];
+                const idIndexes = collectionMemory[1];
+                const entries = collectionMemory.slice(2);
 
                 entries.forEach(entry => {
-                    entry.forEach(value => {
+                    const name = entry[properties.indexOf("name")];
 
-                        // Resolve game object ids.
-                        idIndexes.forEach(index => {
-                            const idIndex = value[index];
-                            value[index] = idIndex < references.length ? references[idIndex] : undefined;
-                        });
-    
-                        // Add entries.
-                        const template = collection.templates[name];
-                        if (template != undefined) {
-                            collection.entries.push(template.fromMemory(properties, value))
-                        }
+                    // Resolve game object ids.
+                    idIndexes.forEach(index => {
+                        const idIndex = entry[index];
+                        entry[index] = idIndex < references.length ? references[idIndex] : {};
                     });
+
+                    // Add entries.
+                    const template = collection.templates[name];
+                    if (template != undefined) {
+                        collection.entries.push(template.fromMemory(properties, entry))
+                    }
                 });
             }
         });
@@ -92,22 +106,25 @@ MemoryManager.prototype = {
                     let idIndexes = [];
 
                     if (values.length > 0) {
-                        idIndexes = values.map((x, i) => [x, i])
+                        idIndexes = values[0].map((x, i) => [x, i])
                             .filter(x => typeof (x[0]) === "object" && /[a-f0-9]{15}/.test(x[0].id))
                             .map(x => x[1]);
                     }
 
-                    values.filter((_x, i) => idIndexes.includes(i)).forEach((value, i) => {
-                        if (value != undefined && value.id != undefined) {
-                            let mapIndex = ids.indexOf(value.id);
-                            if (mapIndex === -1) {
-                                ids.push(value.id);
-                                mapIndex = ids.length - 1;
+                    values.forEach(value => {
+                        value.map((x, i) => [x, i]).filter((_x, i) => idIndexes.includes(i)).forEach(x => {
+                            if (x[0] != undefined && x[0].id != undefined) {
+                                let mapIndex = ids.indexOf(x[0].id);
+                                if (mapIndex === -1) {
+                                    ids.push(x[0].id);
+                                    mapIndex = ids.length - 1;
+                                }
+                                value[x[1]] = mapIndex;
                             }
-                            values[i] = mapIndex;
-                        }
-                    });
-                    memory[key] = [propertyMap, idIndexes, ...values];
+                        });
+                    })
+
+                    memory[key] = [properties, idIndexes, ...values];
                 }
             }
         });
@@ -116,7 +133,7 @@ MemoryManager.prototype = {
     // Registering collections should only happen in the init function.
     register: function (name, baseTemplate, baseDefaults) {
         this.collections[name] = new Collection(baseTemplate, baseDefaults);
-        return collections[name];
+        return this.collections[name];
     }
 }
 
@@ -137,10 +154,10 @@ Collection.prototype = {
     register: function (data) {
         Object.keys(data).forEach(key => {
             const entry = data[key];
-            if (entry != undefined && entry.template != undefined && entry.defaults != undefined) {
+            if (entry != undefined && entry.template != undefined) {
                 const template = { ...this.baseTemplate, ...entry.template };
                 const defaults = { ...this.baseDefaults, ...(entry.defaults || {}) };
-                this.templates[key] = new Entry(template, defaults);
+                this.templates[key] = new Entry(key, template, defaults);
             }
         });
     }

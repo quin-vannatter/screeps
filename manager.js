@@ -20,7 +20,7 @@ Manager.prototype = {
     // Allows services to be registered.
     registerManagers: function(managers) {
         this.managers = managers
-        managers.forEach(manager =>  this[manager.name] = service);
+        managers.forEach(manager =>  this[manager.name] = manager);
     },
 
     requestWork: () => false
@@ -39,7 +39,7 @@ ManagerContainer.prototype = {
         this.managers.forEach(manager => manager.afterInit());
     },
     run: function() {
-        this.managers.forEach(manager => manager.run());
+        this.managers.forEach(manager => manager.run(Game));
     },
     getAll: function(caller) {
         return this.managers.filter(manager => manager != caller);

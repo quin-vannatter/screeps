@@ -7,12 +7,12 @@ function StructureManager() {
 StructureManager.prototype = {
     ...Manager.prototype,
     afterInit: function() {
-        this.TaskManager.taskCollection.register({
+        this.TaskManager.collection.register({
             buildStructure: {
                 template: {
                     execute: self => self.creep.build(self.destination),
                     canExecute: (self, creep) => creep.store[RESOURCE_ENERGY] > 0,
-                    isCompleteFunction: self => self.destination.progressTotal == self.destination.progress,
+                    isComplete: self => self.destination.progressTotal == self.destination.progress,
                     getTasksForRequirements: self => [this.CreepManager.getHarvestClosestSourceTask(self.destination)],
                     bodyParts: [WORK, CARRY],
                     range: 3

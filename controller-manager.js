@@ -7,10 +7,10 @@ function ControllerManager() {
 ControllerManager.prototype = {
     ...Manager.prototype,
     afterInit: function() {
-        this.TaskManager.taskCollection.register({
+        this.TaskManager.collection.register({
             updateController: {
                 template: {
-                    execute: self => self.creep.upgradeController(destination),
+                    execute: self => self.creep.upgradeController(self.destination),
                     meetsRequirements: (self, creep) => creep.store[RESOURCE_ENERGY] > 0,
                     getTasksForRequirements: self => [this.CreepManager.getHarvestClosestSourceTask(self.destination)],
                     isComplete: self => self.creep.store[RESOURCE_ENERGY] == 0 || (self.destination.store != undefined && self.destination.store.getFreeCapacity(RESOURCE_ENERGY) == 0),
@@ -29,7 +29,9 @@ ControllerManager.prototype = {
         this.getControllers().forEach(controller => this.TaskManager.getAndSubmitTask("updateController", { destination: controller }));
     },
     getControllers: function() {
-        return Object.values(Game.creeps).concat(Object.values(Game.spawns)).map(entity => entity.room.controller)
+        return Object.values(Game.creeps).concat(Object.values(Game.spawns))
+        .filter(entity => entity.room.controller.my)
+        .map(entity => entity.room.controller)
         .filter((x, i, a) => a.findIndex(y => y.id === x.id) === i);
     },
     requestWork: function(creep) {

@@ -6,6 +6,8 @@ const { ControllerManager } = require("./controller-manager");
 const { StructureManager } = require("./structure-manager");
 const { MemoryManager } = require("./memory-manager");
 
+const DISABLE_MEMORY = false;
+
 // The order of this list determines execution order.
 const managerContainer = new ManagerContainer([
     MemoryManager,
@@ -18,8 +20,19 @@ const managerContainer = new ManagerContainer([
 
 managerContainer.init();
 
-module.exports.loop = () => {
-    MemoryManager.load();
-    managerContainer.run();
-    MemoryManager.save();
+module.exports.loop = function() {
+    try {
+        if(!DISABLE_MEMORY) {
+            MemoryManager.load();
+        } else {
+            MemoryManager.clear();
+        }
+        managerContainer.run();
+        if(!DISABLE_MEMORY) {
+            MemoryManager.save();
+        }
+    } catch(e) {
+        MemoryManager.clear();
+        throw e;
+    }
 };
