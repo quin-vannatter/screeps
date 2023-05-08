@@ -1,5 +1,3 @@
-
-
 // Manager.
 function Manager(name) {
     this.name = name;

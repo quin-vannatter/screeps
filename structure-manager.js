@@ -20,13 +20,29 @@ StructureManager.prototype = {
                 defaults: {
                     priority: 2 
                 }
+            },
+            repair: {
+                template: {
+                    execute: self => self.creep.repair(self.destination),
+                    isComplete: self => self.destination.hits == self.destination.hitsMax,
+                    bodyParts: [WORK, CARRY],
+                    range: 3
+                }
             }
         });
     },
     run: function() {
+
+        // Build construction sites.
         this.getConstructionSites().forEach(constructionSite => {
             this.TaskManager.getAndSubmitTask("buildStructure", { destination: constructionSite });
         });
+
+        // Repair structures.
+        Object.values(Game.structures).filter(structure => structure.hits < structure.hitsMax).forEach(structure => {
+            this.TaskManager.getAndSubmitTask("repairStructure", {destination: structure });
+        });
+
     },
     getConstructionSites: function() {
         return Object.values(Game.spawns).map(spawn => spawn.room.find(FIND_MY_CONSTRUCTION_SITES)).reduce((a, b) => a.concat(b), []);

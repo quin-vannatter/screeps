@@ -9,14 +9,13 @@ TaskManager.prototype = {
     ...Manager.prototype,
     init: function() {
         this.collection = this.MemoryManager.register("tasks", {
-            abandon: self => self.abandoned = true,
             getTasksForRequirements: () => [],
             assign: (self, creep) => self.creep = creep,
-            unassign: self => delete self.creep,
+            unassign: self => self.creep = {},
             hasBodyParts: (self, creep) => self.bodyParts.every(bodyPart => creep.body.filter(x => x.hits > 0).some(x => x.type === bodyPart)),
-            meetsRequirements: (self, creep) => self.hasBodyParts(creep) && self.canExecute(creep)
+            meetsRequirements: (self, creep) => self.hasBodyParts(creep) && self.canExecute(creep),
+            canExecute: () => true
         }, {
-            abandoned: false,
             creep: {},
             destination: {},
             range: 1,
@@ -30,6 +29,7 @@ TaskManager.prototype = {
         // Purge tasks that don't have a destination.
         let noCreepAvailable = true;
         const assignedCreeps = [];
+
         this.collection.entries = this.collection.entries.sort((a, b) => a.priority - b.priority);
         this.queuedTasks().forEach(task => {
             const creeps = idleCreeps.filter(creep => 
@@ -77,25 +77,20 @@ TaskManager.prototype = {
         }
 
         this.activeTasks().forEach(task => {
-            try {
-                if (!task.isComplete()) {
-                    task.inRange = task.inRange || (task.destination.id != undefined && task.creep.pos.inRangeTo(task.destination, task.range)) || task.destination.id == undefined;
-                    if (!task.inRange) {
-                        task.creep.moveTo(task.destination)
-                    } else {
-                        const result = task.execute();
-                        if (result == ERR_NOT_IN_RANGE) {
-                            task.inRange = false;
-                        } else if(result != OK) {
-                            task.unassign();
-                        }
+            if (!task.isComplete()) {
+                task.inRange = task.inRange || (task.destination.id != undefined && task.creep.pos.inRangeTo(task.destination, task.range)) || task.destination.id == undefined;
+                if (!task.inRange) {
+                    task.creep.moveTo(task.destination)
+                } else {
+                    const result = task.execute();
+                    if (result == ERR_NOT_IN_RANGE) {
+                        task.inRange = false;
+                    } else if(result != OK) {
+                        task.unassign();
                     }
                 }
-            } catch {
-                task.abandon();
             }
         });
-
 
         this.collection.entries = this.collection.entries.filter(task => (task.creep.id == undefined || !task.isComplete()) && task.destination.pos != undefined && !task.abandoned);
     },

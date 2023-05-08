@@ -17,7 +17,8 @@ ControllerManager.prototype = {
                     bodyParts: [
                         WORK,
                         CARRY
-                    ]
+                    ],
+                    range: 3
                 },
                 defaults: {
                     priority: 1

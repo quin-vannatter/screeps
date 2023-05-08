@@ -1,6 +1,4 @@
-const {
-    Manager
-} = require("./manager");
+const { Manager } = require("./manager");
 
 function Entry(name, template, defaults) {
     this.name = name;
@@ -77,7 +75,7 @@ MemoryManager.prototype = {
                     // Resolve game object ids.
                     idIndexes.forEach(index => {
                         const idIndex = entry[index];
-                        entry[index] = idIndex < references.length ? references[idIndex] : {};
+                        entry[index] = (idIndex < references.length ? references[idIndex] : {}) || {};
                     });
 
                     // Add entries.
@@ -106,9 +104,10 @@ MemoryManager.prototype = {
                     let idIndexes = [];
 
                     if (values.length > 0) {
-                        idIndexes = values[0].map((x, i) => [x, i])
+                        idIndexes = values.map(value => value.map((x, i) => [x, i])
                             .filter(x => typeof (x[0]) === "object" && /[a-f0-9]{15}/.test(x[0].id))
-                            .map(x => x[1]);
+                            .map(x => x[1])).reduce((a, b) => a.concat(b), [])
+                            .filter((x, i, a) => a.indexOf(x) === i);
                     }
 
                     values.forEach(value => {
