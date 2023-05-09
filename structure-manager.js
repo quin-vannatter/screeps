@@ -6,8 +6,23 @@ function StructureManager() {
 
 StructureManager.prototype = {
     ...Manager.prototype,
+    init: function() {
+        this.zones = this.MemoryManager.register("zones", {
+            template: {
+                getPositions: () => {
+
+                },
+                condition: () => true
+            },
+            defaults: {
+                positions: []
+            }
+        });
+    },
     afterInit: function() {
-        this.TaskManager.collection.register({
+
+        // Register tasks
+        this.TaskManager.tasks.register({
             buildStructure: {
                 template: {
                     execute: self => self.creep.build(self.destination),
@@ -30,6 +45,40 @@ StructureManager.prototype = {
                 }
             }
         });
+
+        // Register build plans
+        this.zones.register({
+            hug: {
+                template: {
+                    generatePositions: (self, room, target) => {
+                        // Target is either a wall cell type or a structure. In both cases, hugging should produce positions adjacent to blocks of a single type.
+                        if (target.structureType == undefined) {
+
+                        }
+                    }
+                }
+            },
+            raster: {
+                template: {
+
+                }
+            },
+            spiral: {
+                template: {
+
+                }
+            },
+            checker: {
+                template: {
+
+                }
+            },
+            nonBuildable: {
+                template: {
+
+                }
+            }
+        })
     },
     run: function() {
 
@@ -43,6 +92,9 @@ StructureManager.prototype = {
             this.TaskManager.getAndSubmitTask("repairStructure", {destination: structure });
         });
 
+    },
+    resolveZones: function() {
+        
     },
     getConstructionSites: function() {
         return Object.values(Game.spawns).map(spawn => spawn.room.find(FIND_MY_CONSTRUCTION_SITES)).reduce((a, b) => a.concat(b), []);
@@ -58,7 +110,10 @@ StructureManager.prototype = {
         });
         return false;
     },
-    buildCloseTo(target, structureType) {
+    getRoomMap: function(room) {
+        
+    },
+    buildCloseTo: function(target, structureType) {
         const room = target.room;
         const roomTerrain = room.getTerrain();
         const structures = Object.values(Game.structures).concat(Object.values(Game.constructionSites)).filter(structure => structure.room === room);

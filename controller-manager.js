@@ -7,7 +7,7 @@ function ControllerManager() {
 ControllerManager.prototype = {
     ...Manager.prototype,
     afterInit: function() {
-        this.TaskManager.collection.register({
+        this.TaskManager.tasks.register({
             updateController: {
                 template: {
                     execute: self => self.creep.upgradeController(self.destination),

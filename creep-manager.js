@@ -7,7 +7,7 @@ function CreepManager(...services) {
 CreepManager.prototype = {
     ...Manager.prototype,
     afterInit: function() {
-        this.TaskManager.collection.register({
+        this.TaskManager.tasks.register({
             harvestEnergy: {
                 template: {
                     execute: self => self.creep.harvest(self.destination),
@@ -77,7 +77,8 @@ CreepManager.prototype = {
         })
     },
     getHarvestClosestSourceTask: function(destination) {
-        const source = destination.pos.findClosestByPath(FIND_SOURCES) || destination.room.find(FIND_SOURCES)[0];
+        const sources = destination.room.find(FIND_SOURCES);
+        const source = sources[Math.floor(Math.random() * sources.length)];
         if (source != undefined) {
             return this.TaskManager.getTask("harvestEnergy", { destination: source });
         }

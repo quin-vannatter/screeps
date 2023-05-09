@@ -49,7 +49,6 @@ SpawnManager.prototype = {
                     return true;
                 }
                 if(spawns.some(spawn => spawn.store.getCapacity(RESOURCE_ENERGY) < creepCost)) {
-                    this.getRoomSources().forEach(source => this.StructureManager.buildCloseTo(source, STRUCTURE_EXTENSION));
                 }
             }
         }
@@ -60,7 +59,6 @@ SpawnManager.prototype = {
         return rooms.map(room => room.find(FIND_SOURCES)).reduce((a, b) => a.concat(b), []);
     },
     requestWork: function() {
-        this.getRoomSources().forEach(source => this.StructureManager.buildCloseTo(source, STRUCTURE_EXTENSION));
     },
     getRequiredBodyParts: function(tasks) {
         const requiredBodyParts = tasks.map(task => task.bodyParts)

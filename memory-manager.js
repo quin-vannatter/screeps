@@ -130,8 +130,8 @@ MemoryManager.prototype = {
         Memory.ids = ids;
     },
     // Registering collections should only happen in the init function.
-    register: function (name, baseTemplate, baseDefaults) {
-        this.collections[name] = new Collection(baseTemplate, baseDefaults);
+    register: function (name, { template, defaults }) {
+        this.collections[name] = new Collection(template, defaults);
         return this.collections[name];
     }
 }
