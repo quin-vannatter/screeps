@@ -8,7 +8,7 @@ function TaskManager() {
 TaskManager.prototype = {
     ...Manager.prototype,
     init: function() {
-        this.tasks = this.MemoryManager.register("tasks", {
+        this.tasks = this.MemoryManager.register("tasks", true, {
             template: {
                 getTasksForRequirements: () => [],
                 assign: (self, creep) => self.creep = creep,

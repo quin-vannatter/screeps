@@ -6,19 +6,6 @@ function StructureManager() {
 
 StructureManager.prototype = {
     ...Manager.prototype,
-    init: function() {
-        this.zones = this.MemoryManager.register("zones", {
-            template: {
-                getPositions: () => {
-
-                },
-                condition: () => true
-            },
-            defaults: {
-                positions: []
-            }
-        });
-    },
     afterInit: function() {
 
         // Register tasks
@@ -45,40 +32,6 @@ StructureManager.prototype = {
                 }
             }
         });
-
-        // Register build plans
-        this.zones.register({
-            hug: {
-                template: {
-                    generatePositions: (self, room, target) => {
-                        // Target is either a wall cell type or a structure. In both cases, hugging should produce positions adjacent to blocks of a single type.
-                        if (target.structureType == undefined) {
-
-                        }
-                    }
-                }
-            },
-            raster: {
-                template: {
-
-                }
-            },
-            spiral: {
-                template: {
-
-                }
-            },
-            checker: {
-                template: {
-
-                }
-            },
-            nonBuildable: {
-                template: {
-
-                }
-            }
-        })
     },
     run: function() {
 

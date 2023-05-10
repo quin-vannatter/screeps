@@ -31,7 +31,7 @@ ControllerManager.prototype = {
     },
     getControllers: function() {
         return Object.values(Game.creeps).concat(Object.values(Game.spawns))
-        .filter(entity => entity.room.controller.my)
+        .filter(entity => entity.room.controller != undefined)
         .map(entity => entity.room.controller)
         .filter((x, i, a) => a.findIndex(y => y.id === x.id) === i);
     },
