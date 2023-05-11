@@ -17,7 +17,9 @@ StructureManager.prototype = {
                     isComplete: self => self.destination.progressTotal == self.destination.progress,
                     getTasksForRequirements: self => [this.CreepManager.getHarvestClosestSourceTask(self.destination)],
                     bodyParts: [WORK, CARRY],
-                    range: 3
+                    range: 3,
+                    getMessage: () => "Building",
+                    isWorkingTask: true
                 },
                 defaults: {
                     priority: 2 
@@ -28,7 +30,9 @@ StructureManager.prototype = {
                     execute: self => self.creep.repair(self.destination),
                     isComplete: self => self.destination.hits == self.destination.hitsMax,
                     bodyParts: [WORK, CARRY],
-                    range: 3
+                    range: 3,
+                    getMessage: () => "Repairing",
+                    isWorkingTask: true
                 }
             }
         });

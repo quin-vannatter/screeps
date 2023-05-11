@@ -1,12 +1,18 @@
 const { Manager } = require("./manager");
 
 const NAMES = [
-    "Gibbs",
+    "Bustamante",
+    "MacLeod",
     "Bellerieve",
-    "Erik",
+    "Venables",
     "Duke",
     "Dylan",
-    "Yanisin"
+    "Yanisin",
+    "Chauvin",
+    "Erik",
+    "Gibbs",
+    "Gray",
+    "Mitchell"
 ]
 
 function SpawnManager(...services) {
@@ -68,8 +74,27 @@ SpawnManager.prototype = {
     },
     spawn: function(spawn, bodyParts) {
         let name = NAMES[Math.round(1000 * Math.random()) % NAMES.length];
-        const count = Object.keys(Game.creeps).filter(key => key.startsWith(name)).length;
-        name = count == 0 ? name : `${name} Child ${count}`;
+        const number = Math.max(0, ...Object.keys(Game.creeps).filter(key => key.startsWith(name)).map(key => {
+            if (/The\s\d+/.test(key)) {
+                return parseInt(/\d+/.exec(/The\s\d+/.exec(key)[0])[0]);
+            }
+            return 1;
+        })) + 1;
+        let suffix;
+        switch (number % 10) {
+            case 2:
+                suffix = "nd";
+                break;
+            case 3:
+                suffix = "rd";
+                break;
+            default:
+                suffix = "th";
+                break;
+
+        }
+        name = number == 1 ? name : `${name} the ${number}${suffix}`;
+        console.log(`Spawning ${name}.`)
         spawn.spawnCreep(bodyParts, name);
     },
     groupTasks: function(tasks, groupSize) {

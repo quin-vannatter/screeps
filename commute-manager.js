@@ -13,7 +13,7 @@ CommuteManager.prototype = {
             template: {
                 equals: (self, value) => value.x === self.x && value.y === self.y && value.room.name === self.room.name,
                 toRoomPosition: self => new RoomPosition(self.x, self.y, self.room.name),
-                isOccupied: self => self.terrain == 1 || self.creep.id != undefined || Object.values(Game.structures)
+                isOccupied: self => self.occupied || self.terrain == 1 || self.creep.id != undefined || Object.values(Game.structures)
                     .filter(structure => structure.room.name === self.room.name)
                     .some(structure => structure.pos.x == self.x && structure.pos.y == self.y),
                 occupy: (self, creep) => self.creep = creep,
@@ -25,6 +25,7 @@ CommuteManager.prototype = {
                 }
             },
             defaults: {
+                occupied: false,
                 creep: {},
                 terrain: 0,
                 room: {},
@@ -79,7 +80,9 @@ CommuteManager.prototype = {
             if (Object.values(Game.constructionSites).find(x => x.structureType === STRUCTURE_ROAD && x.room.name === room.name) == undefined) {
                 const position = this.positions.entries.filter(x => !x.isOccupied() && x.presence > ROAD_BUILD_THRESHOLD).sort((a, b) => b.presence - a.presence).find(x => x);
                 if (position != undefined) {
-                    position.toRoomPosition().createConstructionSite(STRUCTURE_ROAD);
+                    if(position.toRoomPosition().createConstructionSite(STRUCTURE_ROAD) != OK) {
+                        position.occupied = true;
+                    }
                 }
             }
         });

@@ -11,14 +11,16 @@ ControllerManager.prototype = {
             updateController: {
                 template: {
                     execute: self => self.creep.upgradeController(self.destination),
-                    meetsRequirements: (self, creep) => creep.store[RESOURCE_ENERGY] > 0,
+                    caExecute: (self, creep) => creep.store[RESOURCE_ENERGY] > 0,
                     getTasksForRequirements: self => [this.CreepManager.getHarvestClosestSourceTask(self.destination)],
                     isComplete: self => self.creep.store[RESOURCE_ENERGY] == 0 || (self.destination.store != undefined && self.destination.store.getFreeCapacity(RESOURCE_ENERGY) == 0),
                     bodyParts: [
                         WORK,
                         CARRY
                     ],
-                    range: 3
+                    range: 3,
+                    getMessage: () => "Upgrading",
+                    isWorkingTask: true
                 },
                 defaults: {
                     priority: 1
@@ -33,7 +35,7 @@ ControllerManager.prototype = {
         return Object.values(Game.creeps).concat(Object.values(Game.spawns))
         .filter(entity => entity.room.controller != undefined)
         .map(entity => entity.room.controller)
-        .filter((x, i, a) => a.findIndex(y => y.id === x.id) === i);
+        .filter((x, i, a) => a.findIndex(y => y.id === x.id) === i && x.my);
     },
     requestWork: function(creep) {
         this.getControllers().forEach(controller => {
