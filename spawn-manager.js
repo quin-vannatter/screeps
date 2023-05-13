@@ -15,12 +15,26 @@ const NAMES = [
     "Mitchell"
 ]
 
+const TICKS_TO_LIVE_THRESHOLD = 100;
+
 function SpawnManager(...services) {
     Manager.call(this, SpawnManager.name, services);
 }
 
 SpawnManager.prototype = {
     ...Manager.prototype,
+    afterInit: function() {
+        this.TaskManager.tasks.register({
+            recycleSelf: {
+                template: {
+                    execute: self => self.destination.recycleCreep(self.creep),
+                    canExecute: (self, creep) => creep.ticksToLive <= TICKS_TO_LIVE_THRESHOLD,
+                    isComplete: self => Object.keys(self.creep).length == 0,
+                    getMessage: () => "Seppuku"
+                }
+            }
+        });
+    },
     requestCreep: function (tasks) {
         let groupingSize = tasks.length;
 
@@ -64,7 +78,19 @@ SpawnManager.prototype = {
         const rooms = spawn ? [spawn.room] : Object.values(Game.rooms)
         return rooms.map(room => room.find(FIND_SOURCES)).reduce((a, b) => a.concat(b), []);
     },
-    requestWork: function() {
+    requestWork: function(creep) {
+        // Creeps can recycle themselves.
+        const closestSpawns = creep.room.find(FIND_MY_SPAWNS);
+        if (closestSpawns.length > 0) {
+            const task = this.TaskManager.getTask("recycleSelf", { destination: closestSpawns[0] });
+            if (task.meetsRequirements(creep)) {
+                task.assign(creep);
+                this.TaskManager.submitTask(task);
+                return true;
+            }
+        }
+
+        return false;
     },
     getRequiredBodyParts: function(tasks) {
         const requiredBodyParts = tasks.map(task => task.bodyParts)

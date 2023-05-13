@@ -14,37 +14,43 @@ TaskManager.prototype = {
                 getTasksForRequirements: () => [],
                 assign: (self, creep) => {
                     self.creep = creep;
-                    console.log(`${creep.name} will ${self.getTaskName()}.`)
+                    console.log(`${creep.name} will ${self.getTaskName()}.`);
                     creep.say(self.getMessage(), true);
                 },
-                unassign: self => self.creep = {},
+                unassign: self => {
+                    console.log(`${self.creep.name} will no longer ${self.getTaskName()}.`);
+                    self.creep.say("Unassigned", true);
+                    self.creep = {};
+                },
                 hasBodyParts: (self, creep) => self.bodyParts.every(bodyPart => creep.body.filter(x => x.hits > 0).some(x => x.type === bodyPart)),
                 meetsRequirements: (self, creep) => self.hasBodyParts(creep) && self.canExecute(creep),
                 canExecute: () => true,
                 getTaskName: self => self.name.split("").map((x, i) => (x.toUpperCase() == x) ? ` ${x.toLowerCase()}` : x).join("").trim(),
                 range: 1,
                 getMessage: () => "Doing task",
-                isWorkingTask: false
+                isWorkingTask: false,
+                bodyParts: []
             },
             defaults: {
                 creep: {},
                 destination: {},
                 inRange: false,
-                priority: 0
+                priority: 0,
+                started: false
             }
         });
     },
     run: function() {
 
-        const idleCreeps = this.getIdleCreeps();
+        let idleCreeps = this.getIdleCreeps();
 
-        this.tasks.entries = this.tasks.entries.sort((a, b) => a.priority - b.priority);
+        this.tasks.entries = this.tasks.entries.sort((a, b) => b.priority - a.priority);
 
         this.handleQueuedTasks(idleCreeps);
         this.handleIdleCreeps(idleCreeps);
         this.handleActiveTasks();
 
-        this.tasks.entries = this.tasks.entries.filter(task => (task.creep.id == undefined || !task.isComplete()));
+        this.tasks.entries = this.tasks.entries.filter(task => (task.creep.id == undefined || !task.isComplete()) && Object.keys(task.destination).length > 0);
     },
     getIdleCreeps: function() {
         return Object.values(Game.creeps).filter(creep => !this.tasks.entries.some(task => task.creep.id === creep.id && task.meetsRequirements(creep)));
@@ -53,22 +59,26 @@ TaskManager.prototype = {
 
         // Purge tasks that don't have a destination.
         let noCreepAvailable = true;
-        const queuedTasks = this.queuedTasks();
+        let queuedTasks = this.queuedTasks();
 
-        queuedTasks.forEach(task => {
-            const creeps = idleCreeps.filter(creep => task.hasBodyParts(creep));
-
+        queuedTasks.forEach((task, i) => {
+            const creeps = idleCreeps.filter(creep => creep && task.hasBodyParts(creep));
             if (creeps.length > 0) {
-                const creep = creeps.map(x => [x, x.pos.getRangeTo(task)])
+                
+                const creep = creeps.map(x => [x, x.pos.getRangeTo(task.destination)])
                     .sort((a, b) => a[1] - b[1]).map(x => x[0])
                     .find(creep => task.meetsRequirements(creep));
+
+                if (creep && creep.id === "583726b12cc45a5") {
+                    console.log(task.name, creep.store[RESOURCE_ENERGY], task.meetsRequirements(creep))
+                }
+
                 noCreepAvailable = false;
                 if (creep != undefined) {
                     task.assign(creep);
 
-                    queuedTasks.splice(queuedTasks.indexOf(task), 1);
-                    idleCreeps.splice(idleCreeps.indexOf(creep), 1);
-
+                    queuedTasks[i] = undefined;
+                    idleCreeps[idleCreeps.indexOf(creep)] = undefined
                 } else {
                     const newTasks = task.getTasksForRequirements(creep);
                     if (newTasks.length > 0) {
@@ -78,14 +88,19 @@ TaskManager.prototype = {
                 }
             }
         });
+        queuedTasks = queuedTasks.filter(x => x);
 
         // Get queued tasks that haven't been assigned and create creeps.
         if (noCreepAvailable) {
-            console.log("Requesting more people.");
+
+            // Get tasks where the spawn is the destination and they're deposits and increase the priority.
+            const depositEnergyTasks = queuedTasks.filter(task => task.name === "depositEnergy" && task.destination instanceof StructureSpawn);
+            depositEnergyTasks.forEach(task => task.priority++);
             this.SpawnManager.requestCreep(queuedTasks);
         }
     },
     handleIdleCreeps: function(idleCreeps) {
+        idleCreeps = idleCreeps.filter(x => x);
         if (idleCreeps.length > 0) {
             console.log(`${userFriendlyList(idleCreeps.map(creep => creep.name))} ${idleCreeps.length == 1 ? "is" : "are"} looking for tasks.`);
             idleCreeps.forEach(creep => creep.say("Idle", true));
@@ -94,10 +109,12 @@ TaskManager.prototype = {
         }
     },
     handleActiveTasks: function() {
-        this.activeTasks().forEach(task => {
-            if (task.meetsRequirements(task.creep)) {
+        const activeTasks = this.activeTasks();
+        activeTasks.forEach((task, i) => {
+            task.started = task.meetsRequirements(task.creep) && !activeTasks.some((x, y) => i !== y && x.creep.id === task.creep.id && x.started);
+            if (task.started) {
                 if (!task.isComplete()) {
-                    task.inRange = task.inRange || (task.destination.id != undefined && task.creep.pos.inRangeTo(task.destination, task.range));
+                    task.inRange = task.inRange || task.creep.pos.inRangeTo(task.destination, task.range);
                     if (!task.inRange) {
                         task.creep.moveTo(task.destination);
                     } else {

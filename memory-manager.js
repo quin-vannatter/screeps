@@ -132,10 +132,11 @@ MemoryManager.prototype = {
                                         ids.push(x[0].id || x[0].name);
                                         mapIndex = ids.length - 1;
                                     }
-                                } else if (typeof(x[0]) === "object") {
-                                    mapIndex = ids.indexOf(JSON.stringify(x[0]));
+                                } else {
+                                    const value = JSON.stringify(x[0]);
+                                    mapIndex = ids.indexOf(value);
                                     if (mapIndex === -1) {
-                                        ids.push(JSON.stringify(x[0]));
+                                        ids.push(value);
                                         mapIndex = ids.length - 1;
                                     }
                                 }

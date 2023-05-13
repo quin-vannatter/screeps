@@ -1,5 +1,7 @@
 const { Manager } = require("./manager");
 
+const FETCH_AMOUNT_THRESHOLD = 10;
+
 function CreepManager(...services) {
     Manager.call(this, CreepManager.name, services);
 }
@@ -13,9 +15,12 @@ CreepManager.prototype = {
                     execute: self => self.creep.harvest(self.destination),
                     canExecute: (self, creep) => {
                         const freeCapacity = creep.store.getFreeCapacity(RESOURCE_ENERGY);
-                        return freeCapacity > 0 || freeCapacity == null;
+                        return freeCapacity == null || freeCapacity > 0
                     },
-                    isComplete: self => self.creep.store.getFreeCapacity(RESOURCE_ENERGY) == 0,
+                    isComplete: self => {
+                        const freeCapacity = self.creep.store.getFreeCapacity(RESOURCE_ENERGY);
+                        return freeCapacity != null && freeCapacity === 0;
+                    },
                     bodyParts: [
                         WORK
                     ],
@@ -25,21 +30,30 @@ CreepManager.prototype = {
             fetchDroppedResource: {
                 template: {
                     execute: self => {
-                        if (self.destination instanceof Resource) {
+                        if (self.destination.amount != undefined) {
                             return self.creep.pickup(self.destination)
-                        } else if(self.destination instanceof Structure) {
-                            return self.creep.withdraw(self.destination);
+                        } else if(self.destination.store[RESOURCE_ENERGY] > 0) {
+                            return self.creep.withdraw(self.destination, RESOURCE_ENERGY);
                         }
+                        return -1;
                     },
                     canExecute: (self, creep) => {
                         const freeCapacity = creep.store.getFreeCapacity(RESOURCE_ENERGY);
-                        return freeCapacity > 0 || freeCapacity == null;
+                        if (Object.keys(self.destination).length > 0) {
+                            const amount = self.destination.amount != undefined ? self.destination.amount : self.destination.store[RESOURCE_ENERGY];
+                            return (freeCapacity > 0 || freeCapacity == null) && (amount / freeCapacity * 100) >= FETCH_AMOUNT_THRESHOLD;
+                        } else {
+                            return false;
+                        }
                     },
-                    isComplete: self => self.creep.store.getFreeCapacity(self.destination.resourceType) == 0 || self.destination == undefined || self.destination.amount == 0,
+                    isComplete: self => Object.keys(self.destination).length == 0 || self.destination.amount == 0,
                     bodyParts: [
                         CARRY
                     ],
                     getMessage: () => "Fetching"
+                },
+                defaults: {
+                    priority: 3
                 }
             },
             depositEnergy: {
@@ -72,8 +86,8 @@ CreepManager.prototype = {
     run: function(Game) {
         // Check to see if there's resources on the ground somewhere.
         const droppedResources = Object.values(Game.rooms).map(room => room.find(FIND_DROPPED_RESOURCES).concat(room.find(FIND_TOMBSTONES)
-            .filter(tombstone => tombstone.pos != undefined))).reduce((a, b) => a.concat(b), []);
-        droppedResources.forEach(resource => this.TaskManager.getAndSubmitTask("fetchDroppedResource", { destination: resource }));
+            .filter(tombstone => tombstone.pos != undefined && tombstone.store[RESOURCE_ENERGY] > 0))).reduce((a, b) => a.concat(b), []);
+        droppedResources.forEach(resource => this.TaskManager.getAndSubmitTask("fetchDroppedResource", { destination: resource }, true));
     },
     requestWork: function(creep) {
 
@@ -81,7 +95,7 @@ CreepManager.prototype = {
         const task = this.getHarvestClosestSourceTask(creep);
         if (task.meetsRequirements(creep)) {
             task.assign(creep);
-            this.TaskManager.submitTask(task);
+            this.TaskManager.submitTask(task, true);
             return true;
         }
 
@@ -90,11 +104,11 @@ CreepManager.prototype = {
         // Transferring energy to working creeps is something idle creeps can do.
         const workingCreeps = activeTasks.filter(task => task.isWorkingTask).map(task => task.creep)
             .sort((a, b) => b.store.getFreeCapacity(RESOURCE_ENERGY) - a.store.getFreeCapacity(RESOURCE_ENERGY));
-        if (workingCreeps.length > 0) {
+        if (workingCreeps.length > 0 && !workingCreeps.some(x => x.id === creep.id)) {
             const task = this.TaskManager.getTask("depositEnergy", { destination: workingCreeps[0] });
             if (task.meetsRequirements(creep)) {
                 task.assign(creep);
-                this.TaskManager.submitTask(task);
+                this.TaskManager.submitTask(task, true);
                 return true;
             }
         }
@@ -106,11 +120,10 @@ CreepManager.prototype = {
             const task = this.TaskManager.getTask("withdrawEnergy", { destination: harvestingCreeps[0] });
             if (task.meetsRequirements(creep)) {
                 task.assign(creep);
-                this.TaskManager.submitTask(task);
+                this.TaskManager.submitTask(task, true);
                 return true;
             }
         }
-
 
         return false;
     },

@@ -11,7 +11,7 @@ ControllerManager.prototype = {
             updateController: {
                 template: {
                     execute: self => self.creep.upgradeController(self.destination),
-                    caExecute: (self, creep) => creep.store[RESOURCE_ENERGY] > 0,
+                    canExecute: (self, creep) => creep.store[RESOURCE_ENERGY] > 0,
                     getTasksForRequirements: self => [this.CreepManager.getHarvestClosestSourceTask(self.destination)],
                     isComplete: self => self.creep.store[RESOURCE_ENERGY] == 0 || (self.destination.store != undefined && self.destination.store.getFreeCapacity(RESOURCE_ENERGY) == 0),
                     bodyParts: [

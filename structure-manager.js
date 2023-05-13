@@ -1,5 +1,7 @@
 const { Manager } = require("./manager")
 
+const REPAIR_THRESHOLD = 40;
+
 function StructureManager() {
     Manager.call(this, StructureManager.name);
 }
@@ -20,19 +22,20 @@ StructureManager.prototype = {
                     range: 3,
                     getMessage: () => "Building",
                     isWorkingTask: true
-                },
-                defaults: {
-                    priority: 2 
                 }
             },
-            repair: {
+            repairStructure: {
                 template: {
                     execute: self => self.creep.repair(self.destination),
+                    canExecute: (self, creep) => creep.store[RESOURCE_ENERGY] > 0,
                     isComplete: self => self.destination.hits == self.destination.hitsMax,
                     bodyParts: [WORK, CARRY],
                     range: 3,
                     getMessage: () => "Repairing",
                     isWorkingTask: true
+                },
+                defaults: {
+                    priority: 0
                 }
             }
         });
@@ -40,14 +43,12 @@ StructureManager.prototype = {
     run: function() {
 
         // Build construction sites.
-        this.getConstructionSites().forEach(constructionSite => {
-            this.TaskManager.getAndSubmitTask("buildStructure", { destination: constructionSite });
-        });
+        this.getConstructionSites().forEach(constructionSite => 
+            this.TaskManager.getAndSubmitTask("buildStructure", { destination: constructionSite }));
 
         // Repair structures.
-        Object.values(Game.structures).filter(structure => structure.hits < structure.hitsMax).forEach(structure => {
-            this.TaskManager.getAndSubmitTask("repairStructure", {destination: structure });
-        });
+        this.getStructures().filter(structure => (structure.hits / structure.hitsMax * 100) < REPAIR_THRESHOLD).forEach(structure => 
+            this.TaskManager.getAndSubmitTask("repairStructure", {destination: structure }));
 
     },
     resolveZones: function() {
@@ -67,8 +68,9 @@ StructureManager.prototype = {
         });
         return false;
     },
-    getRoomMap: function(room) {
-        
+    getStructures: function() {
+        return Object.values(Game.rooms).filter(room => room.controller.my)
+            .map(room => room.find(FIND_STRUCTURES)).reduce((a, b) => a.concat(b), []);
     },
     buildCloseTo: function(target, structureType) {
         const room = target.room;
