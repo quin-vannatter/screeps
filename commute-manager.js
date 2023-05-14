@@ -116,8 +116,11 @@ CommuteManager.prototype = {
     positionInZone: function(position) {
         return this.zones.entries.some(zone => zone.getPositions().some(x => x.equals(position)))
     },
-    getBlock: function(target, structureType) {
-        
+    getBlock: function(target, structureType, orthogonal) {
+        orthogonal = orthogonal != undefined ? orthogonal : true;
+        let condition
+        const terrain = target.room.getTerrain();
+        const structure = this.StructureManager.getStructures().find(structure => structure.pos.x === structure.pos.y && structure.room.name === target.room.name);
     }, 
     searchForClosest: function(target, structureType) {
         const terrain = target.room.getTerrain();
