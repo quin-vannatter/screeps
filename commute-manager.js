@@ -118,9 +118,39 @@ CommuteManager.prototype = {
     },
     getBlock: function(target, structureType, orthogonal) {
         orthogonal = orthogonal != undefined ? orthogonal : true;
-        let condition
+        let condition;
         const terrain = target.room.getTerrain();
-        const structure = this.StructureManager.getStructures().find(structure => structure.pos.x === structure.pos.y && structure.room.name === target.room.name);
+        if (typeof(structureType) === "number") {
+            condition = (pos) => terrain.get(...pos) === structureType;
+        } else {
+            const roomStructures = this.StructureManager.getStructures().filter(structure => structure.room.name === target.room.name);
+            condition = (pos) => {
+                const structure = roomStructures.find(x => x.pos.x === pos[0] && x.pos.y === pos[1]);
+                return structure != undefined && structure.structureType === structureType;
+            }
+        }
+        const search = (results, orthogonal) => {
+            let addedResults = false;
+            do {
+                let resultsLength = results.length;
+                results.forEach(item => {
+                    results.push(...new Array(orthogonal ? 4 : 8).fill(0)
+                        .map((_, i) => [[-1,1,0,0,-1,1,-1,1][i] + item.x, [0,0,-1,1,-1,-1,1,1][i] + item.y])
+                        .filter(pos => !results.some(val => val.x === pos.x && val.y === pos.y) && condition(pos))
+                        .map(pos => this.getPosition({
+                            pos : {
+                                x: pos[0],
+                                y: pos[1]
+                            },
+                            room: target.room
+                        }, terrain))
+                        .filter(pos => !this.positionInZone(pos)));
+                    addedResults = addedResults || results.length != resultsLength; 
+                });
+            } while(addedResults);
+            return results;
+        }
+        return search([target], orthogonal);
     }, 
     searchForClosest: function(target, structureType) {
         const terrain = target.room.getTerrain();
