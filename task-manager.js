@@ -35,8 +35,7 @@ TaskManager.prototype = {
                 creep: {},
                 destination: {},
                 inRange: false,
-                priority: 0,
-                started: false
+                priority: 0
             }
         });
     },
@@ -68,10 +67,6 @@ TaskManager.prototype = {
                 const creep = creeps.map(x => [x, x.pos.getRangeTo(task.destination)])
                     .sort((a, b) => a[1] - b[1]).map(x => x[0])
                     .find(creep => task.meetsRequirements(creep));
-
-                if (creep && creep.id === "583726b12cc45a5") {
-                    console.log(task.name, creep.store[RESOURCE_ENERGY], task.meetsRequirements(creep))
-                }
 
                 noCreepAvailable = false;
                 if (creep != undefined) {
@@ -111,25 +106,27 @@ TaskManager.prototype = {
     handleActiveTasks: function() {
         const activeTasks = this.activeTasks();
         activeTasks.forEach((task, i) => {
-            task.started = task.meetsRequirements(task.creep) && !activeTasks.some((x, y) => i !== y && x.creep.id === task.creep.id && x.started);
-            if (task.started) {
-                if (!task.isComplete()) {
-                    task.inRange = task.inRange || task.creep.pos.inRangeTo(task.destination, task.range);
-                    if (!task.inRange) {
-                        task.creep.moveTo(task.destination);
-                    } else {
-                        const result = task.execute();
-                        if (result == ERR_NOT_IN_RANGE) {
-                            task.inRange = false;
-                        } else if(result != OK) {
-                            task.unassign();
-                        }
-                    }
+            if (!task.isComplete() && !task.meetsRequirements(task.creep)) {
+                task.unassign();
+            } else if (!task.isComplete()) {
+                task.inRange = task.inRange || task.creep.pos.inRangeTo(task.destination, task.range);
+                if (!task.inRange) {
+                    task.creep.moveTo(task.destination);
                 } else {
-                    task.creep.say("Complete", true);
+                    const result = task.execute();
+                    if (result == ERR_NOT_IN_RANGE) {
+                        task.inRange = false;
+                    } else if(result != OK) {
+                        task.unassign();
+                    }
                 }
+            } else {
+                task.creep.say("Complete", true);
             }
         });
+    },
+    unassignCreep: function(creep) {
+        this.tasks.entries.filter(task => task.creep.id === creep.id).forEach(task => task.unassign());
     },
     getAndSubmitTask: function(name, options, allowDuplicateTasks) {
         this.submitTask(this.getTask(name, options), allowDuplicateTasks);

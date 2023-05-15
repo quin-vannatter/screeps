@@ -1,6 +1,7 @@
 const { Manager } = require("./manager");
 
 const FETCH_AMOUNT_THRESHOLD = 10;
+const IDLE_TICK_THRESHOLD = 100;
 
 function CreepManager(...services) {
     Manager.call(this, CreepManager.name, services);
@@ -8,6 +9,18 @@ function CreepManager(...services) {
 
 CreepManager.prototype = {
     ...Manager.prototype,
+    init: function() {
+        this.creeps = this.MemoryManager.register("creeps", true, {
+            template: {
+                isAlive: self => Object.keys(self.creep).length > 0,
+                isIdle: self => !this.TaskManager.tasks.some(task => task.creep === self.task)
+            },
+            defaults: {
+                creep: {},
+                idleTicks: 0
+            }
+        }).single();
+    },
     afterInit: function() {
         this.TaskManager.tasks.register({
             harvestEnergy: {
@@ -87,7 +100,25 @@ CreepManager.prototype = {
         // Check to see if there's resources on the ground somewhere.
         const droppedResources = Object.values(Game.rooms).map(room => room.find(FIND_DROPPED_RESOURCES).concat(room.find(FIND_TOMBSTONES)
             .filter(tombstone => tombstone.pos != undefined && tombstone.store[RESOURCE_ENERGY] > 0))).reduce((a, b) => a.concat(b), []);
-        droppedResources.forEach(resource => this.TaskManager.getAndSubmitTask("fetchDroppedResource", { destination: resource }, true));
+        droppedResources.forEach(resource => this.TaskManager.getAndSubmitTask("fetchDroppedResource", { destination: resource }));
+
+        // Ensure we remove dead creeps from our memory and add new creeps.
+        this.creeps.entries = this.creeps.entries.filter(creep => creep.isAlive())
+            .concat(Object.values(Game.creeps).filter(creep => this.creeps.entries.some(x => x.creep.id === creep.id)).map(creep => this.creeps.create({ creep })));
+
+        // Increment idle ticks if creep is idle.
+        this.creeps.entries.forEach(creep => {
+            if (creep.isIdle()) {
+                creep.idleTicks++;
+            } else {
+                creep.idleTicks = 0;
+            }
+        });
+
+        // Kill any creeps that are idle too long.
+        this.creeps.entries.filter(creep => creep.isIdle() && creep.idleTicks > 100).forEach(creep => {
+
+        });
     },
     requestWork: function(creep) {
 

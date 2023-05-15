@@ -28,9 +28,8 @@ SpawnManager.prototype = {
             recycleSelf: {
                 template: {
                     execute: self => self.destination.recycleCreep(self.creep),
-                    canExecute: (self, creep) => creep.ticksToLive <= TICKS_TO_LIVE_THRESHOLD,
                     isComplete: self => Object.keys(self.creep).length == 0,
-                    getMessage: () => "Seppuku"
+                    getMessage: () => "Recycle"
                 }
             }
         });
@@ -80,14 +79,9 @@ SpawnManager.prototype = {
     },
     requestWork: function(creep) {
         // Creeps can recycle themselves.
-        const closestSpawns = creep.room.find(FIND_MY_SPAWNS);
-        if (closestSpawns.length > 0) {
-            const task = this.TaskManager.getTask("recycleSelf", { destination: closestSpawns[0] });
-            if (task.meetsRequirements(creep)) {
-                task.assign(creep);
-                this.TaskManager.submitTask(task);
-                return true;
-            }
+        if (creep.ticksToLive < TICKS_TO_LIVE_THRESHOLD) {
+            this.recycleAtClosestSpawn(creep);
+            return true;
         }
 
         return false;
@@ -131,6 +125,16 @@ SpawnManager.prototype = {
             i++;
             return a;
         }, new Array(Math.floor(tasks.length / groupSize)).fill([]))
+    },
+    recycleAtClosestSpawn: function(creep) {
+        const spawns = creep.room.find(FIND_MY_SPAWNS).sort((a, b) => a.pos.getRangeTo(creep) - b.pos.getRangeTo(creep));
+        if(spawns.length > 0) {
+            const spawn = spawns[0];
+            const task = this.TaskManager.getTask("recycleSelf", { destination: spawn });
+            this.TaskManager.unassignCreep(creep);
+            task.assign(creep);
+            this.TaskManager.submitTask(task);
+        }
     },
     getClosestSpawn: function(tasks) {
         return tasks.filter(task => task.destination.pos != undefined)
