@@ -47,13 +47,19 @@ CommuteManager.prototype = {
             template: {
                 equal: (self, position) => self.x === position.x && self.y === position.y && self.room.name === position.room.name,
                 occupyNextPosition: (self, creep) => {
-                    const position = self.getPositions().find(position => position.getOccupant() == undefined)
+                    const position = self.getPositions().find(position => {
+                        const occupant = position.getOccupant();
+                        return occupant == undefined || occupant.structureType === STRUCTURE_ROAD;
+                    })
                     if (position != undefined) {
                         position.occupy(creep);
                         return position.toRoomPosition();
                     }
                 },
-                isFull: self => !self.getPositions().some(position => position.getOccupant() == undefined),
+                isFull: self => !self.getPositions().some(position => {
+                    const occupant = position.getOccupant();
+                    return occupant == undefined || occupant.structureType == STRUCTURE_ROAD;
+                }),
                 getPositions: self => self.positions.map(index => this.positions.entries[index])
             },
             defaults: {
@@ -103,19 +109,26 @@ CommuteManager.prototype = {
         this.commuteCreeps();
     },
     commuteCreeps: function() {
-        this.positions.entries.filter(position => position.isCommuting()).forEach(position => position.creep.moveTo(position.toRoomPosition()));
+        this.positions.entries.filter(position => position.isCommuting()).forEach(position => {
+            position.creep.moveTo(position.toRoomPosition());
+        });
     },
     commuteTo: function(creep, target, range) {
         const zone = this.zones.entries.find(zone => zone.target == target);
         const alreadyAssigned = this.zones.entries.some(zone => zone.target == target && zone.getPositions().some(position => position.creep.id == creep.id));
+        if (creep.id === "25ca66c8c5d454e") {
+            console.log(JSON.stringify(zone.getPositions()));
+        }
         if (zone != undefined && !alreadyAssigned) {
             if (!zone.isFull()) {
+                this.vacate(creep);
                 zone.occupyNextPosition(creep);
             }
         } else if (!alreadyAssigned) {
             const terrain = target.room.getTerrain();
             const position = this.getPosition(target, terrain);
             if (position.getOccupant() == undefined) {
+                this.vacate(creep);
                 position.occupy(creep, range);
             }
         }
@@ -123,7 +136,12 @@ CommuteManager.prototype = {
     canCommuteTo: function(target) {
         const terrain = target.room.getTerrain();
         const zone = this.zones.entries.find(zone => zone.target == target);
-        return zone == undefined ? this.getPosition(target, terrain).getOccupant() == undefined : !zone.isFull();
+        if (zone == undefined) {
+            const occupant = this.getPosition(target, terrain).getOccupant();
+            return occupant == undefined || occupant.structureType == STRUCTURE_ROAD;
+        } else {
+            return !zone.isFull()
+        }
     },
     commuteComplete: function(creep) {
         const position = this.positions.entries.find(position => position.creep.id === creep.id);

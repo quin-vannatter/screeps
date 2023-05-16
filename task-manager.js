@@ -112,8 +112,7 @@ TaskManager.prototype = {
 
                 if (this.CommuteManager.canCommuteTo(task.destination)) {
                     this.CommuteManager.commuteTo(task.creep, task.destination, task.range);
-                } 
-
+                }
                 if (this.CommuteManager.commuteComplete(task.creep)) {
                     const result = task.execute();
                     if(result != OK) {
