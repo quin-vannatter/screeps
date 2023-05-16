@@ -13,7 +13,7 @@ CreepManager.prototype = {
         this.creeps = this.MemoryManager.register("creeps", true, {
             template: {
                 isAlive: self => Object.keys(self.creep).length > 0,
-                isIdle: self => !this.TaskManager.tasks.some(task => task.creep === self.task)
+                isIdle: self => !this.TaskManager.tasks.entries.some(task => task.creep.id === self.creep.id)
             },
             defaults: {
                 creep: {},
@@ -104,7 +104,7 @@ CreepManager.prototype = {
 
         // Ensure we remove dead creeps from our memory and add new creeps.
         this.creeps.entries = this.creeps.entries.filter(creep => creep.isAlive())
-            .concat(Object.values(Game.creeps).filter(creep => this.creeps.entries.some(x => x.creep.id === creep.id)).map(creep => this.creeps.create({ creep })));
+            .concat(Object.values(Game.creeps).filter(creep => !this.creeps.entries.some(x => x.creep.id === creep.id)).map(creep => this.creeps.create({ creep })));
 
         // Increment idle ticks if creep is idle.
         this.creeps.entries.forEach(creep => {
@@ -116,9 +116,8 @@ CreepManager.prototype = {
         });
 
         // Kill any creeps that are idle too long.
-        this.creeps.entries.filter(creep => creep.isIdle() && creep.idleTicks > 100).forEach(creep => {
-
-        });
+        this.creeps.entries.filter(creep => creep.isIdle() && creep.idleTicks > IDLE_TICK_THRESHOLD)
+            .forEach(creep => this.SpawnManager.recycleAtClosestSpawn(creep));
     },
     requestWork: function(creep) {
 

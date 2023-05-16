@@ -34,7 +34,6 @@ TaskManager.prototype = {
             defaults: {
                 creep: {},
                 destination: {},
-                inRange: false,
                 priority: 0
             }
         });
@@ -108,19 +107,22 @@ TaskManager.prototype = {
         activeTasks.forEach((task, i) => {
             if (!task.isComplete() && !task.meetsRequirements(task.creep)) {
                 task.unassign();
+                this.CommuteManager.vacate(task.creep);
             } else if (!task.isComplete()) {
-                task.inRange = task.inRange || task.creep.pos.inRangeTo(task.destination, task.range);
-                if (!task.inRange) {
-                    task.creep.moveTo(task.destination);
-                } else {
+
+                if (this.CommuteManager.canCommuteTo(task.destination)) {
+                    this.CommuteManager.commuteTo(task.creep, task.destination, task.range);
+                } 
+
+                if (this.CommuteManager.commuteComplete(task.creep)) {
                     const result = task.execute();
-                    if (result == ERR_NOT_IN_RANGE) {
-                        task.inRange = false;
-                    } else if(result != OK) {
+                    if(result != OK) {
                         task.unassign();
+                        this.CommuteManager.vacate(task.creep);
                     }
                 }
             } else {
+                this.CommuteManager.vacate(task.creep);
                 task.creep.say("Complete", true);
             }
         });

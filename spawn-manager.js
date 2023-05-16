@@ -17,6 +17,9 @@ const NAMES = [
 
 const TICKS_TO_LIVE_THRESHOLD = 100;
 
+// Percentage of used roads to stop producing creeps with 1-1 MOVE parts.
+const USING_ROADS_THRESHOLD = 70;
+
 function SpawnManager(...services) {
     Manager.call(this, SpawnManager.name, services);
 }
@@ -90,7 +93,8 @@ SpawnManager.prototype = {
         const requiredBodyParts = tasks.map(task => task.bodyParts)
             .reduce((a, b) => a.concat(b), [])
             .filter((x, i, a) => a.indexOf(x) == i);
-        return new Array(requiredBodyParts.length).fill(MOVE).concat(requiredBodyParts);
+        return new Array(Math.ceil(requiredBodyParts.length / (this.usingRoads ? 2 : 1)))
+            .fill(MOVE).concat(requiredBodyParts);
     },
     spawn: function(spawn, bodyParts) {
         let name = NAMES[Math.round(1000 * Math.random()) % NAMES.length];
@@ -125,6 +129,15 @@ SpawnManager.prototype = {
             i++;
             return a;
         }, new Array(Math.floor(tasks.length / groupSize)).fill([]))
+    },
+    usingRoads: function() {
+        const presencePositions = this.CommuteManager.positions.filter(position => position.presence > 0);
+        const roadPositions = presencePositions.filter(position => {
+            const occupant = position.getOccupant();
+            return occupant != undefined && occupant.structureType === STRUCTURE_ROAD;
+        });
+
+        return (roadPositions / presencePositions * 100) > USING_ROADS_THRESHOLD;
     },
     recycleAtClosestSpawn: function(creep) {
         const spawns = creep.room.find(FIND_MY_SPAWNS).sort((a, b) => a.pos.getRangeTo(creep) - b.pos.getRangeTo(creep));
