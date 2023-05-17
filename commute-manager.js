@@ -17,7 +17,7 @@ CommuteManager.prototype = {
                     .find(structure => structure.room.name === self.room.name && structure.pos.x == self.x && structure.pos.y == self.y),
                 occupy: (self, creep, range) => {
                     self.creep = creep;
-                    self.range = range || 1;
+                    self.range = range != undefined ? range : 1;
                 },
                 vacate: self => self.creep = {},
                 isBuildable: self => {
@@ -52,7 +52,7 @@ CommuteManager.prototype = {
                         return occupant == undefined || occupant.structureType === STRUCTURE_ROAD;
                     })
                     if (position != undefined) {
-                        position.occupy(creep);
+                        position.occupy(creep, 0);
                         return position.toRoomPosition();
                     }
                 },
@@ -110,15 +110,16 @@ CommuteManager.prototype = {
     },
     commuteCreeps: function() {
         this.positions.entries.filter(position => position.isCommuting()).forEach(position => {
-            position.creep.moveTo(position.toRoomPosition());
+            try {
+                position.creep.moveTo(position.toRoomPosition());
+            } catch {
+                position.vacate();
+            }
         });
     },
     commuteTo: function(creep, target, range) {
         const zone = this.zones.entries.find(zone => zone.target == target);
         const alreadyAssigned = this.zones.entries.some(zone => zone.target == target && zone.getPositions().some(position => position.creep.id == creep.id));
-        if (creep.id === "25ca66c8c5d454e") {
-            console.log(JSON.stringify(zone.getPositions()));
-        }
         if (zone != undefined && !alreadyAssigned) {
             if (!zone.isFull()) {
                 this.vacate(creep);
@@ -132,6 +133,9 @@ CommuteManager.prototype = {
                 position.occupy(creep, range);
             }
         }
+    },
+    getSafeZone: function(target) {
+        return this.zones.entries.find(zone => zone.target == target && zone.name == "safe");
     },
     canCommuteTo: function(target) {
         const terrain = target.room.getTerrain();
@@ -247,12 +251,12 @@ CommuteManager.prototype = {
     getOpenPositionsByRange: function(target, range) {
         range = Math.max(Math.min(range || 1, 25), 1);
         const terrain = target.room.getTerrain();
-        const coords = {
-            x: target.pos.x - range,
-            y: target.pos.y - range
-        }
         const positions = [];
         for (let i = 1; i <= range; i++) {
+            const coords = {
+                x: target.pos.x - i,
+                y: target.pos.y - i
+            }
             const size = i * 2 + 1;
             for(let h = 0; h < size * size; h++) {
                 const position = {

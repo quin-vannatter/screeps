@@ -147,7 +147,10 @@ TaskManager.prototype = {
         return task;
     },
     meetsThreshold: function(task) {
-        return this.tasks.entries.filter(x => x.name === task.name && task.destination.id === x.destination.id).length <= Object.keys(Game.creeps).length;
+        const zone = this.CommuteManager.getSafeZone(task.destination);
+        return zone == undefined ? 
+            this.tasks.entries.filter(x => x.name === task.name && task.destination.id === x.destination.id).length <= Object.keys(Game.creeps).length : 
+            !zone.isFull();
     },
     taskExists: function(task) {
         return this.tasks.entries.some(x => x.name === task.name && task.destination.id === x.destination.id);
