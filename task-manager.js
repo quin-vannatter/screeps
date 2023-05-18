@@ -48,10 +48,10 @@ TaskManager.prototype = {
         this.handleIdleCreeps(idleCreeps);
         this.handleActiveTasks();
 
-        this.tasks.entries = this.tasks.entries.filter(task => (task.creep.id == undefined || !task.isComplete()) && Object.keys(task.destination).length > 0);
+        this.tasks.entries = this.tasks.entries.filter(task => (!this.e.exists(task.creep) || !task.isComplete()) && Object.keys(task.destination).length > 0);
     },
     getIdleCreeps: function() {
-        return Object.values(Game.creeps).filter(creep => !this.tasks.entries.some(task => task.creep.id === creep.id && task.meetsRequirements(creep)));
+        return this.e.creeps.filter(creep => this.e.exists(creep) && !creep.spawning && !this.tasks.entries.some(task => task.creep == creep && task.meetsRequirements(creep)));
     },
     handleQueuedTasks: function(idleCreeps) {
 
@@ -109,11 +109,12 @@ TaskManager.prototype = {
                 task.unassign();
                 this.CommuteManager.vacate(task.creep);
             } else if (!task.isComplete()) {
-
-                if (this.CommuteManager.canCommuteTo(task.destination)) {
-                    this.CommuteManager.commuteTo(task.creep, task.destination, task.range);
+                if (this.CommuteManager.canCommuteTo(task.destination, task.creep)) {
+                    this.CommuteManager.commuteTo(task.creep, task.destination);
+                } else if (!task.creep.pos.inRangeTo(task.destination, task.range)) {
+                    task.creep.moveTo(task.destination);
                 }
-                if (this.CommuteManager.commuteComplete(task.creep)) {
+                if (this.CommuteManager.commuteComplete(task.creep) || task.creep.pos.inRangeTo(task.destination, task.range)) {
                     const result = task.execute();
                     if(result != OK) {
                         task.unassign();
@@ -127,7 +128,7 @@ TaskManager.prototype = {
         });
     },
     unassignCreep: function(creep) {
-        this.tasks.entries.filter(task => task.creep.id === creep.id).forEach(task => task.unassign());
+        this.tasks.entries.filter(task => task.creep == creep).forEach(task => task.unassign());
     },
     getAndSubmitTask: function(name, options, allowDuplicateTasks) {
         this.submitTask(this.getTask(name, options), allowDuplicateTasks);
@@ -149,17 +150,17 @@ TaskManager.prototype = {
     meetsThreshold: function(task) {
         const zone = this.CommuteManager.getSafeZone(task.destination);
         return zone == undefined ? 
-            this.tasks.entries.filter(x => x.name === task.name && task.destination.id === x.destination.id).length <= Object.keys(Game.creeps).length : 
+            this.tasks.entries.filter(x => x.name === task.name && task.destination == x.destination).length <= this.e.creeps.length : 
             !zone.isFull();
     },
     taskExists: function(task) {
-        return this.tasks.entries.some(x => x.name === task.name && task.destination.id === x.destination.id);
+        return this.tasks.entries.some(x => x.name === task.name && task.destination == x.destination);
     },
     queuedTasks: function() {
-        return this.tasks.entries.filter(task => task.creep.id == undefined);
+        return this.tasks.entries.filter(task => !this.e.exists(task.creep));
     },
     activeTasks: function() {
-        return this.tasks.entries.filter(task => task.creep.id != undefined);
+        return this.tasks.entries.filter(task => this.e.exists(task.creep));
     }
 }
 

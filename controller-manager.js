@@ -29,24 +29,21 @@ ControllerManager.prototype = {
         });
     },
     run: function() {
-        this.getControllers().forEach(controller => this.TaskManager.getAndSubmitTask("updateController", { destination: controller }));
-    },
-    getControllers: function() {
-        return Object.values(Game.creeps).concat(Object.values(Game.spawns))
-        .filter(entity => entity.room.controller != undefined)
-        .map(entity => entity.room.controller)
-        .filter((x, i, a) => a.findIndex(y => y.id === x.id) === i && x.my);
+        this.e.controllers.forEach(controller => this.TaskManager.getAndSubmitTask("updateController", { destination: controller }));
     },
     requestWork: function(creep) {
-        this.getControllers().forEach(controller => {
-            const task = this.TaskManager.getTask("updateController", { destination: controller });
-            if (task.meetsRequirements(creep)) {
-                task.assign(creep);
-                this.TaskManager.submitTask(task, true);
-                return true;
+        this.e.controllers.forEach(controller => {
+            const zone = this.CommuteManager.getSafeZone(controller);
+            if (zone != undefined && !zone.isFull()) {
+                const task = this.TaskManager.getTask("updateController", { destination: controller });
+                if (task.meetsRequirements(creep)) {
+                    task.assign(creep);
+                    this.TaskManager.submitTask(task, true);
+                    return true;
+                }
             }
-            return false;
         });
+        return false;
     }
 }
 

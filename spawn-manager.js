@@ -37,6 +37,9 @@ SpawnManager.prototype = {
             }
         });
     },
+    run: function() {
+        this.handleExtensions();
+    },
     requestCreep: function (tasks) {
         let groupingSize = tasks.length;
 
@@ -70,15 +73,38 @@ SpawnManager.prototype = {
                     validSpawns.forEach(validSpawn => this.TaskManager.getAndSubmitTask("depositEnergy", { destination: validSpawn }));
                     return true;
                 }
-                if(spawns.some(spawn => spawn.store.getCapacity(RESOURCE_ENERGY) < creepCost)) {
-                }
             }
         }
         return false;
     },
     getRoomSources: function(spawn) {
-        const rooms = spawn ? [spawn.room] : Object.values(Game.rooms)
-        return rooms.map(room => room.find(FIND_SOURCES)).reduce((a, b) => a.concat(b), []);
+        const rooms = spawn ? [spawn.room] : this.e.rooms;
+        return this.e.sources.filter(source => rooms.some(room => room.name === source.room.name));
+    },
+    handleExtensions: function() {
+
+        // Create new extensions.
+        this.e.spawns.map(spawn => spawn.room).forEach(room => {
+            const sources = this.e.sources.filter(source => source.room.name === room.name)
+            const constructionSites = this.e.constructionSites.filter(constructionSite => constructionSite.room.name == room.name);
+            const zones = sources.map(source => {
+                const zones = this.CommuteManager.getZones(source, "hug").filter(zone => !zone.isFull());
+                if (zones.length == 0) {
+                    zones.push(this.CommuteManager.createZone("hug", source, TERRAIN_MASK_WALL))
+                }
+                return zones;
+            }).reduce((a, b) => a.concat(b), []);
+            zones.forEach(zone => {
+                const position = zone.getNextPosition();
+                if (!constructionSites.some(x => x.pos.x == position.x && x.pos.y == position.y)) {
+                    position.toRoomPosition().createConstructionSite(STRUCTURE_EXTENSION);
+                }
+            })
+        });
+
+        // Make sure extensions are full.
+        this.e.structures.filter(structure => structure.structureType === STRUCTURE_EXTENSION)
+            .forEach(extension => this.TaskManager.getAndSubmitTask("depositEnergy", { destination: extension }))
     },
     requestWork: function(creep) {
         // Creeps can recycle themselves.
@@ -140,7 +166,7 @@ SpawnManager.prototype = {
         return (roadPositions / presencePositions * 100) > USING_ROADS_THRESHOLD;
     },
     recycleAtClosestSpawn: function(creep) {
-        const spawns = creep.room.find(FIND_MY_SPAWNS).sort((a, b) => a.pos.getRangeTo(creep) - b.pos.getRangeTo(creep));
+        const spawns = this.e.spawns.filter(spawn => spawn.room.name === creep.room.name).sort((a, b) => a.pos.getRangeTo(creep) - b.pos.getRangeTo(creep));
         if(spawns.length > 0) {
             const spawn = spawns[0];
             const task = this.TaskManager.getTask("recycleSelf", { destination: spawn });
@@ -153,7 +179,7 @@ SpawnManager.prototype = {
         return tasks.filter(task => task.destination.pos != undefined)
             .map(task => task.destination.pos.findClosestByPath(FIND_MY_SPAWNS)).reduce((a, b) => {
             if (b != null) {
-                let entry = a.find(x => x.value.id == b.id);
+                let entry = a.find(x => x.value == b);
                 if (entry == undefined) {
                     entry = {
                         value: b,

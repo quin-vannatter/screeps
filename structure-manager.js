@@ -43,22 +43,16 @@ StructureManager.prototype = {
     run: function() {
 
         // Build construction sites.
-        this.getConstructionSites().forEach(constructionSite => 
+        this.e.constructionSites.forEach(constructionSite => 
             this.TaskManager.getAndSubmitTask("buildStructure", { destination: constructionSite }));
 
         // Repair structures.
-        this.getStructures().filter(structure => (structure.hits / structure.hitsMax * 100) < REPAIR_THRESHOLD).forEach(structure => 
+        this.e.structures.filter(structure => (structure.hits / structure.hitsMax * 100) < REPAIR_THRESHOLD).forEach(structure => 
             this.TaskManager.getAndSubmitTask("repairStructure", {destination: structure }));
 
     },
-    resolveZones: function() {
-        
-    },
-    getConstructionSites: function() {
-        return Object.values(Game.spawns).map(spawn => spawn.room.find(FIND_MY_CONSTRUCTION_SITES)).reduce((a, b) => a.concat(b), []);
-    },
     requestWork: function(creep) {
-        this.getConstructionSites().forEach(constructionSite => {
+        this.e.constructionSites.forEach(constructionSite => {
             const task = this.TaskManager.getTask("buildStructure", { destination: constructionSite });
             if (task.meetsRequirements(creep)) {
                 task.assign(creep);
@@ -68,14 +62,10 @@ StructureManager.prototype = {
         });
         return false;
     },
-    getStructures: function() {
-        return Object.values(Game.rooms).filter(room => room.controller.my)
-            .map(room => room.find(FIND_STRUCTURES)).reduce((a, b) => a.concat(b), []);
-    },
     buildCloseTo: function(target, structureType) {
         const room = target.room;
         const roomTerrain = room.getTerrain();
-        const structures = Object.values(Game.structures).concat(Object.values(Game.constructionSites)).filter(structure => structure.room === room);
+        const structures = this.e.structures.concat(this.e.constructionSites).filter(structure => structure.room === room);
         const pos = target.pos;
         let spotFound = false;
         let range = 1;

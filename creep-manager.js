@@ -13,7 +13,7 @@ CreepManager.prototype = {
         this.creeps = this.MemoryManager.register("creeps", true, {
             template: {
                 isAlive: self => Object.keys(self.creep).length > 0,
-                isIdle: self => !this.TaskManager.tasks.entries.some(task => task.creep.id === self.creep.id)
+                isIdle: self => !this.TaskManager.tasks.entries.some(task => task.creep == self.creep)
             },
             defaults: {
                 creep: {},
@@ -59,7 +59,7 @@ CreepManager.prototype = {
                             return false;
                         }
                     },
-                    isComplete: self => Object.keys(self.destination).length == 0 || self.destination.amount == 0,
+                    isComplete: self => !this.e.exists(self.destination) || self.destination.amount == 0,
                     bodyParts: [
                         CARRY
                     ],
@@ -98,26 +98,26 @@ CreepManager.prototype = {
     },
     run: function(Game) {
         // Check to see if there's resources on the ground somewhere.
-        const droppedResources = Object.values(Game.rooms).map(room => room.find(FIND_DROPPED_RESOURCES).concat(room.find(FIND_TOMBSTONES)
-            .filter(tombstone => tombstone.pos != undefined && tombstone.store[RESOURCE_ENERGY] > 0))).reduce((a, b) => a.concat(b), []);
+        const droppedResources = this.e.droppedResources.concat(this.e.tombstones.filter(tombstone => tombstone.pos != undefined && tombstone.store[RESOURCE_ENERGY] > 0))
+            .reduce((a, b) => a.concat(b), []);
         droppedResources.forEach(resource => this.TaskManager.getAndSubmitTask("fetchDroppedResource", { destination: resource }));
 
         // Ensure we remove dead creeps from our memory and add new creeps.
         this.creeps.entries = this.creeps.entries.filter(creep => creep.isAlive())
-            .concat(Object.values(Game.creeps).filter(creep => !this.creeps.entries.some(x => x.creep.id === creep.id)).map(creep => this.creeps.create({ creep })));
+            .concat(this.e.creeps.filter(creep => !this.creeps.entries.some(x => x.creep == creep)).map(creep => this.creeps.create({ creep })));
 
         // Increment idle ticks if creep is idle.
-        this.creeps.entries.forEach(creep => {
-            if (creep.isIdle()) {
-                creep.idleTicks++;
+        this.creeps.entries.forEach(entry => {
+            if (entry.isIdle()) {
+                entry.idleTicks++;
             } else {
-                creep.idleTicks = 0;
+                entry.idleTicks = 0;
             }
         });
 
         // Kill any creeps that are idle too long.
-        this.creeps.entries.filter(creep => creep.isIdle() && creep.idleTicks > IDLE_TICK_THRESHOLD)
-            .forEach(creep => this.SpawnManager.recycleAtClosestSpawn(creep));
+        this.creeps.entries.filter(entry => entry.isIdle() && entry.idleTicks > IDLE_TICK_THRESHOLD && this.e.exists(entry.creep.id))
+            .forEach(entry => this.SpawnManager.recycleAtClosestSpawn(entry.creep));
     },
     requestWork: function(creep) {
 
@@ -134,7 +134,7 @@ CreepManager.prototype = {
         // Transferring energy to working creeps is something idle creeps can do.
         const workingCreeps = activeTasks.filter(task => task.isWorkingTask).map(task => task.creep)
             .sort((a, b) => b.store.getFreeCapacity(RESOURCE_ENERGY) - a.store.getFreeCapacity(RESOURCE_ENERGY));
-        if (workingCreeps.length > 0 && !workingCreeps.some(x => x.id === creep.id)) {
+        if (workingCreeps.length > 0 && !workingCreeps.some(x => x == creep)) {
             const task = this.TaskManager.getTask("depositEnergy", { destination: workingCreeps[0] });
             if (task.meetsRequirements(creep)) {
                 task.assign(creep);
@@ -158,7 +158,7 @@ CreepManager.prototype = {
         return false;
     },
     getHarvestClosestSourceTask: function(destination) {
-        const sources = destination.room.find(FIND_SOURCES);
+        const sources = this.e.sources.filter(source => source.room.name === destination.room.name);
         const source = sources[Math.floor(Math.random() * sources.length)];
         if (source != undefined) {
             return this.TaskManager.getTask("harvestEnergy", { destination: source });

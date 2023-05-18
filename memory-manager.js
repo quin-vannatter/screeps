@@ -46,6 +46,7 @@ function MemoryManager() {
 MemoryManager.prototype = {
     ...Manager.prototype,
     setup: function () {
+        this.e.clear();
         if (Memory.collections == undefined) {
             Memory.collections = {};
         }
@@ -82,14 +83,8 @@ MemoryManager.prototype = {
     getReference(index) {
         try {
             const value = this.ids[index];
-            let reference;
-            if (NAME_PATTERN.test(value)) {
-                reference = Game.rooms[value];
-            } else if (ID_PATTERN.test(value)) {
-                reference = Game.getObjectById(value);
-            } else {
-                reference = JSON.parse(value);
-            }
+            const isId = ID_PATTERN.test(value);
+            const reference = (isId || NAME_PATTERN.test(value)) ? this.e.get(value, !isId) : JSON.parse(value);
             return reference || {};
         } catch {
             return {};
