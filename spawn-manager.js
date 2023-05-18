@@ -12,7 +12,17 @@ const NAMES = [
     "Erik",
     "Gibbs",
     "Gray",
-    "Mitchell"
+    "Mitchell",
+    "Coleton",
+    "Aman",
+    "Justin",
+    "Dorish",
+    "Jack",
+    "Quinlan",
+    "Don",
+    "Cassia",
+    "Taylor",
+    "Stacey"
 ]
 
 const TICKS_TO_LIVE_THRESHOLD = 100;
@@ -63,12 +73,12 @@ SpawnManager.prototype = {
         if (spawns.length > 0) {
             const bodyParts = this.getRequiredBodyParts(tasks);
             const creepCost = this.getCreepCost(bodyParts);
-            const validSpawn = spawns.find(spawn => spawn.store[RESOURCE_ENERGY] >= creepCost);
+            const validSpawn = spawns.find(spawn => spawn.room.energyAvailable >= creepCost);
             if (validSpawn != undefined) {
                 this.spawn(validSpawn, bodyParts);
                 return true;
             } else {
-                const validSpawns = spawns.filter(spawn => spawn.store.getCapacity(RESOURCE_ENERGY) >= creepCost);
+                const validSpawns = spawns.filter(spawn => spawn.room.energyAvailable >= creepCost);
                 if (validSpawns.length > 0) {
                     validSpawns.forEach(validSpawn => this.TaskManager.getAndSubmitTask("depositEnergy", { destination: validSpawn }));
                     return true;
