@@ -41,8 +41,9 @@ SpawnManager.prototype = {
             recycleSelf: {
                 template: {
                     execute: self => self.destination.recycleCreep(self.creep),
-                    isComplete: self => Object.keys(self.creep).length == 0,
-                    getMessage: () => "Recycle"
+                    isComplete: self => !this.e.exists(self.creep),
+                    getMessage: () => "Recycle",
+                    checkCreep: false
                 }
             }
         });
@@ -78,7 +79,7 @@ SpawnManager.prototype = {
                 this.spawn(validSpawn, bodyParts);
                 return true;
             } else {
-                const validSpawns = spawns.filter(spawn => spawn.room.energyAvailable >= creepCost);
+                const validSpawns = spawns.filter(spawn => spawn.room.energyCapacityAvailable >= creepCost);
                 if (validSpawns.length > 0) {
                     validSpawns.forEach(validSpawn => this.TaskManager.getAndSubmitTask("depositEnergy", { destination: validSpawn }));
                     return true;
@@ -86,10 +87,6 @@ SpawnManager.prototype = {
             }
         }
         return false;
-    },
-    getRoomSources: function(spawn) {
-        const rooms = spawn ? [spawn.room] : this.e.rooms;
-        return this.e.sources.filter(source => rooms.some(room => room.name === source.room.name));
     },
     handleExtensions: function() {
 
@@ -114,6 +111,10 @@ SpawnManager.prototype = {
 
         // Make sure extensions are full.
         this.e.structures.filter(structure => structure.structureType === STRUCTURE_EXTENSION)
+            .filter(structure => {
+                const freeCapacity = structure.store.getFreeCapacity(RESOURCE_ENERGY);
+                return freeCapacity == null || freeCapacity > 0
+            })
             .forEach(extension => this.TaskManager.getAndSubmitTask("depositEnergy", { destination: extension }))
     },
     requestWork: function(creep) {
@@ -127,8 +128,7 @@ SpawnManager.prototype = {
     },
     getRequiredBodyParts: function(tasks) {
         const requiredBodyParts = tasks.map(task => task.bodyParts)
-            .reduce((a, b) => a.concat(b), [])
-            .filter((x, i, a) => a.indexOf(x) == i);
+            .reduce((a, b) => a.concat(b), []);
         return new Array(Math.ceil(requiredBodyParts.length / (this.usingRoads ? 2 : 1)))
             .fill(MOVE).concat(requiredBodyParts);
     },

@@ -12,7 +12,6 @@ CreepManager.prototype = {
     init: function() {
         this.creeps = this.MemoryManager.register("creeps", true, {
             template: {
-                isAlive: self => Object.keys(self.creep).length > 0,
                 isIdle: self => !this.TaskManager.tasks.entries.some(task => task.creep == self.creep)
             },
             defaults: {
@@ -93,17 +92,22 @@ CreepManager.prototype = {
                     ],
                     getMessage: () => "Withdraw"
                 }
+            },
+            explore: {
+                template: {
+                    
+                }
             }
         });
     },
-    run: function(Game) {
+    run: function() {
         // Check to see if there's resources on the ground somewhere.
         const droppedResources = this.e.droppedResources.concat(this.e.tombstones.filter(tombstone => tombstone.pos != undefined && tombstone.store[RESOURCE_ENERGY] > 0))
             .reduce((a, b) => a.concat(b), []);
         droppedResources.forEach(resource => this.TaskManager.getAndSubmitTask("fetchDroppedResource", { destination: resource }));
 
         // Ensure we remove dead creeps from our memory and add new creeps.
-        this.creeps.entries = this.creeps.entries.filter(creep => creep.isAlive())
+        this.creeps.entries = this.creeps.entries.filter(creep => this.e.exists(creep))
             .concat(this.e.creeps.filter(creep => !this.creeps.entries.some(x => x.creep == creep)).map(creep => this.creeps.create({ creep })));
 
         // Increment idle ticks if creep is idle.
@@ -115,30 +119,31 @@ CreepManager.prototype = {
             }
         });
 
-        // Kill any creeps that are idle too long.
-        this.creeps.entries.filter(entry => entry.isIdle() && entry.idleTicks > IDLE_TICK_THRESHOLD && this.e.exists(entry.creep.id))
+        this.creeps.entries.filter(entry => entry.isIdle() && entry.idleTicks > IDLE_TICK_THRESHOLD && this.e.exists(entry.creep))
             .forEach(entry => this.SpawnManager.recycleAtClosestSpawn(entry.creep));
+    },
+    get: function(creep) {
+        return this.creeps.entries.find(entry => entry.creep == creep);
+    },
+    doAfter: function(time, fn) {
+        this.creeps.entries.filter(entry => entry.isIdle() && entry.idleTicks > time && this.e.exists(entry.creep)).forEach(entry => fn(entry.creep));
     },
     requestWork: function(creep) {
 
-        // Harvesting is something idle creeps can do.
+        const activeTasks = this.TaskManager.activeTasks();
+
+        // Idle creeps can harvest if there's room.
         const task = this.getHarvestClosestSourceTask(creep);
-        if (task.meetsRequirements(creep)) {
-            task.assign(creep);
-            this.TaskManager.submitTask(task, true);
+        if (this.TaskManager.submitTask(task, creep)) {
             return true;
         }
-
-        const activeTasks = this.TaskManager.activeTasks();
 
         // Transferring energy to working creeps is something idle creeps can do.
         const workingCreeps = activeTasks.filter(task => task.isWorkingTask).map(task => task.creep)
             .sort((a, b) => b.store.getFreeCapacity(RESOURCE_ENERGY) - a.store.getFreeCapacity(RESOURCE_ENERGY));
         if (workingCreeps.length > 0 && !workingCreeps.some(x => x == creep)) {
             const task = this.TaskManager.getTask("depositEnergy", { destination: workingCreeps[0] });
-            if (task.meetsRequirements(creep)) {
-                task.assign(creep);
-                this.TaskManager.submitTask(task, true);
+            if (this.TaskManager.submitTask(task, creep)) {
                 return true;
             }
         }
@@ -148,20 +153,23 @@ CreepManager.prototype = {
             .sort((a, b) => a.store.getFreeCapacity(RESOURCE_ENERGY) - b.store.getFreeCapacity(RESOURCE_ENERGY));
         if (harvestingCreeps.length > 0) {
             const task = this.TaskManager.getTask("withdrawEnergy", { destination: harvestingCreeps[0] });
-            if (task.meetsRequirements(creep)) {
-                task.assign(creep);
-                this.TaskManager.submitTask(task, true);
+            if (this.TaskManager.submitTask(task, creep)) {
                 return true;
             }
         }
 
+
+
         return false;
     },
     getHarvestClosestSourceTask: function(destination) {
-        const sources = this.e.sources.filter(source => source.room.name === destination.room.name);
-        const source = sources[Math.floor(Math.random() * sources.length)];
-        if (source != undefined) {
-            return this.TaskManager.getTask("harvestEnergy", { destination: source });
+        const sources = this.e.sources.filter(source => {
+            const zone = this.CommuteManager.getSafeZone(source);
+            return zone === undefined || !zone.isFull();
+        }).sort((a, b) => a.pos.getRangeTo(destination) - b.pos.getRangeTo(destination));
+
+        if (sources.length > 0) {
+            return this.TaskManager.getTask("harvestEnergy", { destination: sources[0] });
         }
     }
 }

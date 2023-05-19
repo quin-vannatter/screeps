@@ -24,7 +24,9 @@ CommuteManager.prototype = {
                     self.creep = creep;
                     self.range = range != undefined ? range : 1;
                 },
-                vacate: self => self.creep = {},
+                vacate: self => {
+                    self.creep = {};
+                },
                 isBuildable: self => {
                     const occupant = self.getOccupant();
                     return self.terrain != TERRAIN_MASK_WALL && (occupant == undefined || occupant.structureType === STRUCTURE_ROAD);
@@ -57,11 +59,16 @@ CommuteManager.prototype = {
                         return position;
                     }
                 },
+                reserveNextPosition: self => self.reservations++,
                 getNextPosition: (self, ignoreRoads) => {
                     const position = self.getPositions().find(position => !position.getOccupant(ignoreRoads));
                     return position;
                 },
-                isFull: self => !self.getPositions().some(position => !position.getOccupant(true)),
+                isFull: (self, ignoreReservations) => {
+                    const reservations = this.TaskManager.tasks.entries.filter(task => task.destination == self.target).length;
+                    const occupiedPositions = self.getPositions().filter(position => position.getOccupant(true));
+                    return (self.positions.length - occupiedPositions.length) <= (ignoreReservations ? 0 : reservations);
+                },
                 getPositions: self => self.positions.map(index => this.positions.entries[index])
             },
             defaults: {
@@ -103,6 +110,14 @@ CommuteManager.prototype = {
                         self.target = target;
                     }
                 }
+            },
+            exits: {
+                template: {
+                    generatePositions: (self, target) => {
+                        self.positions = this.positionsToZone(this.getExitPositions(target));
+                        self.target = target;
+                    } 
+                }
             }
         });
     },
@@ -110,6 +125,7 @@ CommuteManager.prototype = {
         this.recordPresence();
         this.handleRoadConstruction();
         this.generateSafeZones();
+        this.generateExitPositions();
         this.commuteCreeps();
         if (!(Game.time % ZONE_UPDATE_FREQUENCY)) {
             this.updateZones();
@@ -135,7 +151,7 @@ CommuteManager.prototype = {
         const zone = this.zones.entries.find(zone => zone.target == target);
         const alreadyAssigned = this.zones.entries.some(zone => zone.target == target && zone.getPositions().some(position => position.creep == creep));
         if (zone != undefined && !alreadyAssigned) {
-            if (!zone.isFull()) {
+            if (!zone.isFull(true)) {
                 this.vacate(creep);
                 zone.occupyNextPosition(creep);
             }
@@ -143,7 +159,7 @@ CommuteManager.prototype = {
     },
     canCommuteTo: function(target, creep) {
         const zone = this.zones.entries.find(zone => zone.target == target);
-        return zone != undefined && (!zone.isFull() || zone.getPositions().some(position => position.creep == creep));
+        return zone != undefined && (!zone.isFull(true) || zone.getPositions().some(position => position.creep == creep));
     },
     commuteComplete: function(creep) {
         const position = this.positions.entries.find(position => position.creep == creep);
@@ -188,6 +204,15 @@ CommuteManager.prototype = {
         });
         this.zones.entries.push(...newZones);
     },
+    generateExitPositions: function() {
+        const newRooms = this.e.rooms.filter(room => this.getZones(room, "exits").length == 0);
+        const newZones = newRooms.map(target => {
+            const zone = this.zones.create("exits", {});
+            zone.generatePositions(target);
+            return zone;
+        });
+        this.zones.entries.push(...newZones);
+    },
     getPosition: function(target, terrain) {
         if (target.room.name != undefined && target.pos.x != undefined && target.pos.y != undefined) {
             let position = this.positions.entries.find(position => position.x === target.pos.x && position.y === target.pos.y && target.room.name === position.room.name);
@@ -197,6 +222,18 @@ CommuteManager.prototype = {
             }
             return position;
         }
+    },
+    getExitPositions: function(room) {
+        const terrain = room.getTerrain();
+        const coords = Array(50).fill(0).map((_, i) => [[0, i], [49, i], [i, 0], [1, 49]]).reduce((a, b) => a.concat(b), [])
+            .filter(coord => terrain.get(...coord) === 0);
+        return coords.map(pos => this.getPosition({
+            pos: {
+                x: pos[0],
+                y: pos[1]
+            },
+            room
+        }, terrain));
     },
     recordPresence: function() {
         const terrain = {};

@@ -35,7 +35,7 @@ StructureManager.prototype = {
                     isWorkingTask: true
                 },
                 defaults: {
-                    priority: 0
+                    priority: 2
                 }
             }
         });
@@ -54,9 +54,7 @@ StructureManager.prototype = {
     requestWork: function(creep) {
         this.e.constructionSites.forEach(constructionSite => {
             const task = this.TaskManager.getTask("buildStructure", { destination: constructionSite });
-            if (task.meetsRequirements(creep)) {
-                task.assign(creep);
-                this.TaskManager.submitTask(task, true);
+            if (this.TaskManager.submitTask(task, creep)) {
                 return true;
             }
         });

@@ -21,9 +21,6 @@ ControllerManager.prototype = {
                     range: 3,
                     getMessage: () => "Upgrading",
                     isWorkingTask: true
-                },
-                defaults: {
-                    priority: 1
                 }
             }
         });
@@ -36,9 +33,7 @@ ControllerManager.prototype = {
             const zone = this.CommuteManager.getSafeZone(controller);
             if (zone != undefined && !zone.isFull()) {
                 const task = this.TaskManager.getTask("updateController", { destination: controller });
-                if (task.meetsRequirements(creep)) {
-                    task.assign(creep);
-                    this.TaskManager.submitTask(task, true);
+                if (this.TaskManager.submitTask(task, creep)) {
                     return true;
                 }
             }
