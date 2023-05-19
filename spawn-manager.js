@@ -53,7 +53,6 @@ SpawnManager.prototype = {
     },
     requestCreep: function (tasks) {
         let groupingSize = tasks.length;
-
         if (groupingSize == 0) {
             return;
         }
@@ -66,7 +65,7 @@ SpawnManager.prototype = {
                 }
             });
             groupingSize--;
-        } while(!tasks.length > 0 && groupingSize >= 1)
+        } while(tasks.length > 0 && groupingSize > 1)
     },
     // Returns true if a creep can be spawned or if a spawn has the capacity to spawn a creep.
     requestCreepForTasks: function(tasks) {
@@ -159,12 +158,16 @@ SpawnManager.prototype = {
     },
     groupTasks: function(tasks, groupSize) {
         let i = 0;
+        console.log(tasks.length, groupSize)
         return tasks.reduce((a,b) => {
             const index = Math.floor(i == 0 ? 0 : i / groupSize);
+            if (a[index] == undefined) {
+                a[index] = [];
+            }
             a[index].push(b);
             i++;
             return a;
-        }, new Array(Math.floor(tasks.length / groupSize)).fill([]))
+        },[])
     },
     usingRoads: function() {
         const presencePositions = this.CommuteManager.positions.filter(position => position.presence > 0);
