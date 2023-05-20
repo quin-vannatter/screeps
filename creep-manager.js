@@ -16,7 +16,8 @@ CreepManager.prototype = {
             },
             defaults: {
                 creep: {},
-                idleTicks: 0
+                idleTicks: 0,
+                hits: 0
             }
         }).single();
     },
@@ -27,11 +28,11 @@ CreepManager.prototype = {
                     execute: self => self.creep.harvest(self.destination),
                     canExecute: (self, creep) => {
                         const freeCapacity = creep.store.getFreeCapacity(RESOURCE_ENERGY);
-                        return freeCapacity == null || freeCapacity > 0
+                        return (freeCapacity == null || freeCapacity > 0) && self.destination.energy > 0
                     },
                     isComplete: self => {
                         const freeCapacity = self.creep.store.getFreeCapacity(RESOURCE_ENERGY);
-                        return freeCapacity != null && freeCapacity === 0;
+                        return (freeCapacity != null && freeCapacity === 0) && self.destination.energy == 0
                     },
                     bodyParts: [
                         WORK
@@ -71,7 +72,7 @@ CreepManager.prototype = {
             depositEnergy: {
                 template: {
                     execute: self => self.creep.transfer(self.destination, RESOURCE_ENERGY),
-                    canExecute: (self, creep) => creep.store[RESOURCE_ENERGY] > 0,
+                    canExecute: (self, creep) => creep.store[RESOURCE_ENERGY] > 0 && (self.destination.store != undefined && self.destination.store.getFreeCapacity(RESOURCE_ENERGY) > 0),
                     getTasksForRequirements: self => [this.CreepManager.getHarvestClosestSourceTask(self.destination)],
                     isComplete: self => self.creep.store[RESOURCE_ENERGY] == 0 || (self.destination.store != undefined && self.destination.store.getFreeCapacity(RESOURCE_ENERGY) == 0),
                     bodyParts: [
@@ -83,7 +84,7 @@ CreepManager.prototype = {
             withdrawEnergy: {
                 template: {
                     execute: self => self.destination.transfer(self.creep, RESOURCE_ENERGY),
-                    canExecute: (self, creep) => creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+                    canExecute: (self, creep) => creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 && (self.destination.store != undefined && self.destination.store[RESOURCE_ENERGY] > 0),
                     getTasksForRequirements: self => [this.CreepManager.getHarvestClosestSourceTask(self.destination)],
                     isComplete: self => (self.destination.store != undefined && self.destination.store[RESOURCE_ENERGY] == 0) || self.creep.store.getFreeCapacity(RESOURCE_ENERGY) == 0,
                     bodyParts: [
@@ -108,7 +109,13 @@ CreepManager.prototype = {
 
         // Ensure we remove dead creeps from our memory and add new creeps.
         this.creeps.entries = this.creeps.entries.filter(creep => this.e.exists(creep))
-            .concat(this.e.creeps.filter(creep => !this.creeps.entries.some(x => x.creep == creep)).map(creep => this.creeps.create({ creep })));
+            .concat(this.e.creeps.filter(creep => !this.creeps.entries.some(x => x.creep == creep)).map(creep => this.creeps.create({ creep, hits: creep.hits })));
+
+        // Record any attacks
+        this.creeps.entries.filter(entry => entry.hits > entry.creep.hits).forEach(entry => this.CommuteManager.recordAttack(entry.creep));
+
+        // Update hits.
+        this.creeps.entries.forEach(entry => entry.hits = entry.creep.hits);
 
         // Increment idle ticks if creep is idle.
         this.creeps.entries.forEach(entry => {
@@ -118,9 +125,6 @@ CreepManager.prototype = {
                 entry.idleTicks = 0;
             }
         });
-
-        this.creeps.entries.filter(entry => entry.isIdle() && entry.idleTicks > IDLE_TICK_THRESHOLD && this.e.exists(entry.creep))
-            .forEach(entry => this.SpawnManager.recycleAtClosestSpawn(entry.creep));
     },
     get: function(creep) {
         return this.creeps.entries.find(entry => entry.creep == creep);

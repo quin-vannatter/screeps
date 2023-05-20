@@ -18,17 +18,17 @@ const NAMES = [
     "Justin",
     "Dorish",
     "Jack",
-    "Quinlan",
-    "Don",
     "Cassia",
-    "Taylor",
-    "Stacey"
+    "Taylor"
 ]
 
 const TICKS_TO_LIVE_THRESHOLD = 100;
 
 // Percentage of used roads to stop producing creeps with 1-1 MOVE parts.
 const USING_ROADS_THRESHOLD = 70;
+
+// Percentage threshold to wait until spawning.
+const SPAWN_PERCENT_MODIFIER = 0.9;
 
 function SpawnManager(...services) {
     Manager.call(this, SpawnManager.name, services);
@@ -41,9 +41,18 @@ SpawnManager.prototype = {
             recycleSelf: {
                 template: {
                     execute: self => self.destination.recycleCreep(self.creep),
+                    canExecute: self => self.destination.store != undefined && self.destination.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
                     isComplete: self => !this.e.exists(self.creep),
                     getMessage: () => "Recycle",
                     checkCreep: false
+                }
+            },
+            renewSelf: {
+                template: {
+                    execute: self => self.destination.renewCreep(self.creep),
+                    isComplete: self => self.creep.ticksToLive > (self.ticksToLive || 0),
+                    onAssign: self => self.ticksToLive = self.creep.ticksToLive,
+                    getMessage: () => "Renew"
                 }
             }
         });
@@ -51,29 +60,45 @@ SpawnManager.prototype = {
     run: function() {
         this.handleExtensions();
     },
-    requestCreep: function (tasks) {
-        let groupingSize = tasks.length;
-        if (groupingSize == 0) {
-            return;
+    requestCreep: function (tasks, idleCreeps) {
+        const threshold = 100 - (100 * Math.pow(SPAWN_PERCENT_MODIFIER, this.e.creeps.length));
+        const idleCreepBodyParts = idleCreeps
+            .map(creep => creep && creep.body.map(bodyPart => bodyPart.type) || [])
+            .reduce((a, b) => a.concat(b), []);
+        const spawns = this.e.spawns;
+        let bodyParts = this.getBodyParts(tasks, idleCreepBodyParts);
+        while(!this.requestCreepForTasks(bodyParts, spawns, threshold) && bodyParts.length > 0) {
+            bodyParts.pop();
         }
-        do {
-            const groupedTasks = this.groupTasks(tasks, groupingSize);
-            tasks = [];
-            groupedTasks.forEach(taskGroup => {
-                if(!this.requestCreepForTasks(taskGroup)) {
-                    tasks = tasks.concat(taskGroup);
-                }
-            });
-            groupingSize--;
-        } while(tasks.length > 0 && groupingSize > 1)
+    },
+    getBodyParts: function (tasks, idleCreepBodyParts) {
+        const bodyParts = tasks.filter(x => x).map(task => task.bodyParts).reduce((a, b) => a.concat(b), []);
+        idleCreepBodyParts.forEach(bodyPart => {
+            const index = bodyParts.indexOf(bodyPart);
+            if (index != -1) {
+                bodyParts.splice(index, 1);
+            }
+        });
+        const results = [];
+        const bodyPartMap = Object.keys(BODYPART_COST);
+        let i = 0;
+        while(bodyParts.length > 0) {
+            const index = bodyParts.indexOf(bodyPartMap[i]);
+            if (index != -1) {
+                const value = bodyParts[index];
+                results.push(value);
+                bodyParts.splice(index, 1);
+            }
+            i = ((i + 1) % bodyPartMap.length);
+        }
+        return results;
     },
     // Returns true if a creep can be spawned or if a spawn has the capacity to spawn a creep.
-    requestCreepForTasks: function(tasks) {
-        const spawns = this.getClosestSpawn(tasks);
+    requestCreepForTasks: function(bodyParts, spawns, threshold) {
         if (spawns.length > 0) {
-            const bodyParts = this.getRequiredBodyParts(tasks);
+            bodyParts = this.getRequiredBodyParts(bodyParts);
             const creepCost = this.getCreepCost(bodyParts);
-            const validSpawn = spawns.find(spawn => spawn.room.energyAvailable >= creepCost);
+            const validSpawn = spawns.find(spawn => spawn.room.energyAvailable >= creepCost && (spawn.room.energyAvailable / spawn.room.energyCapacityAvailable * 100) > threshold);
             if (validSpawn != undefined) {
                 this.spawn(validSpawn, bodyParts);
                 return true;
@@ -81,7 +106,6 @@ SpawnManager.prototype = {
                 const validSpawns = spawns.filter(spawn => spawn.room.energyCapacityAvailable >= creepCost);
                 if (validSpawns.length > 0) {
                     validSpawns.forEach(validSpawn => this.TaskManager.getAndSubmitTask("depositEnergy", { destination: validSpawn }));
-                    return true;
                 }
             }
         }
@@ -119,17 +143,15 @@ SpawnManager.prototype = {
     requestWork: function(creep) {
         // Creeps can recycle themselves.
         if (creep.ticksToLive < TICKS_TO_LIVE_THRESHOLD) {
-            this.recycleAtClosestSpawn(creep);
+            this.recycleOrRenewAtClosestSpawn(creep);
             return true;
         }
 
         return false;
     },
-    getRequiredBodyParts: function(tasks) {
-        const requiredBodyParts = tasks.map(task => task.bodyParts)
-            .reduce((a, b) => a.concat(b), []);
-        return new Array(Math.ceil(requiredBodyParts.length / (this.usingRoads ? 2 : 1)))
-            .fill(MOVE).concat(requiredBodyParts);
+    getRequiredBodyParts: function(bodyParts) {
+        return new Array(Math.ceil(bodyParts.length / (this.usingRoads ? 2 : 1)))
+            .fill(MOVE).concat(bodyParts);
     },
     spawn: function(spawn, bodyParts) {
         let name = NAMES[Math.round(1000 * Math.random()) % NAMES.length];
@@ -153,21 +175,9 @@ SpawnManager.prototype = {
 
         }
         name = number == 1 ? name : `${name} the ${number}${suffix}`;
-        console.log(`Spawning ${name}.`)
-        spawn.spawnCreep(bodyParts, name);
-    },
-    groupTasks: function(tasks, groupSize) {
-        let i = 0;
-        console.log(tasks.length, groupSize)
-        return tasks.reduce((a,b) => {
-            const index = Math.floor(i == 0 ? 0 : i / groupSize);
-            if (a[index] == undefined) {
-                a[index] = [];
-            }
-            a[index].push(b);
-            i++;
-            return a;
-        },[])
+        if(spawn.spawnCreep(bodyParts, name) == OK) {
+            console.log(`Spawning ${name}.`);
+        }
     },
     usingRoads: function() {
         const presencePositions = this.CommuteManager.positions.filter(position => position.presence > 0);
@@ -178,14 +188,12 @@ SpawnManager.prototype = {
 
         return (roadPositions / presencePositions * 100) > USING_ROADS_THRESHOLD;
     },
-    recycleAtClosestSpawn: function(creep) {
+    recycleOrRenewAtClosestSpawn: function(creep) {
         const spawns = this.e.spawns.filter(spawn => spawn.room.name === creep.room.name).sort((a, b) => a.pos.getRangeTo(creep) - b.pos.getRangeTo(creep));
         if(spawns.length > 0) {
             const spawn = spawns[0];
-            const task = this.TaskManager.getTask("recycleSelf", { destination: spawn });
             this.TaskManager.unassignCreep(creep);
-            task.assign(creep);
-            this.TaskManager.submitTask(task);
+            this.TaskManager.submitTask(this.TaskManager.getTask(spawn.store.getFreeCapacity(RESOURCE_ENERGY) > 0 ? "recycleSelf" : "renewSelf", { destination: spawn }), creep);
         }
     },
     getClosestSpawn: function(tasks) {
@@ -206,7 +214,7 @@ SpawnManager.prototype = {
         }, []).sort((a, b) => b.count - a.count).map(x => x.value);
     },
     getCreepCost: function (bodyParts) {
-        return bodyParts.map(bodyPart => BODYPART_COST[bodyPart]).reduce((a, b) => a + b);
+        return bodyParts.length > 0 && bodyParts.map(bodyPart => BODYPART_COST[bodyPart]).reduce((a, b) => a + b);
     }
 }
 

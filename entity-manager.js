@@ -6,6 +6,7 @@ function EntityManager(...services) {
     const entityMapping = {
         rooms: () => Object.values(Game.rooms),
         structures: () => this.rooms.filter(room => room.controller.my).map(room => room.find(FIND_STRUCTURES)).reduce((a, b) => a.concat(b), []),
+        nonRoadStructures: () => this.structures.filter(structure => structure.structureType !== STRUCTURE_ROAD),
         constructionSites: () => this.rooms.map(room => room.find(FIND_MY_CONSTRUCTION_SITES)).reduce((a, b) => a.concat(b), []),
         spawns: () => Object.values(Game.spawns),
         sources: () => this.rooms.map(room => room.find(FIND_SOURCES)).reduce((a, b) => a.concat(b), []),

@@ -17,7 +17,7 @@ CommuteManager.prototype = {
                 equals: (self, value) => value.x === self.x && value.y === self.y && value.room.name === self.room.name,
                 toRoomPosition: self => new RoomPosition(self.x, self.y, self.room.name),
                 getOccupant: (self, ignoreRoads) => {
-                    const structures = this.e.structures.filter(structure => !ignoreRoads || structure.structureType !== STRUCTURE_ROAD);
+                    const structures = ignoreRoads ? this.e.nonRoadStructures : this.e.structures;
                     return this.e.exists(self.creep) ? self.creep : structures.find(structure => structure.room.name === self.room.name && structure.pos.x == self.x && structure.pos.y == self.y)
                 },
                 occupy: (self, creep, range) => {
@@ -37,6 +37,9 @@ CommuteManager.prototype = {
                         self.lastCreep = creep;
                     }
                 },
+                recordAttack: self => {
+                    self.attacks++;
+                },
                 isCommuting: self => this.e.exists(self.creep) && (!self.creep.pos.x !== self.x || self.creep.pos.y !== self.y)
             },
             defaults: {
@@ -46,7 +49,8 @@ CommuteManager.prototype = {
                 x: 0,
                 y: 0,
                 lastCreep: {}, 
-                presence: 0
+                presence: 0,
+                attacks: 0
             }
         }).single();
         this.zones = this.MemoryManager.register("zones", true, {
@@ -214,6 +218,9 @@ CommuteManager.prototype = {
         this.zones.entries.push(...newZones);
     },
     getPosition: function(target, terrain) {
+        if (terrain == undefined) {
+            terrain = target.room.getTerrain();
+        }
         if (target.room.name != undefined && target.pos.x != undefined && target.pos.y != undefined) {
             let position = this.positions.entries.find(position => position.x === target.pos.x && position.y === target.pos.y && target.room.name === position.room.name);
             if (position == undefined) {
@@ -246,6 +253,12 @@ CommuteManager.prototype = {
                 position.recordPresence(creep);
             }
         })
+    },
+    recordAttack: function(creep) {
+        const position = this.getPosition(creep);
+        if (position != undefined) {
+            position.attacks++;
+        }
     },
     handleRoadConstruction: function() {
         this.e.rooms.forEach(room => {

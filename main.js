@@ -9,6 +9,8 @@ const { CommuteManager } = require("./commute-manager");
 const { e } = require("./entity-manager");
 
 const DISABLE_MEMORY = false;
+const DISABLE_SPEAKING = false;
+const DISABLE_PUBLIC_SPEAKING = true;
 
 // The order of this list determines execution order.
 const managerContainer = new ManagerContainer([
@@ -21,7 +23,14 @@ const managerContainer = new ManagerContainer([
     CreepManager,
     SpawnManager,
     TaskManager
-])
+]);
+
+Creep.prototype._say = Creep.prototype.say;
+Creep.prototype.say = function(message, isPublic) {
+    if (!DISABLE_SPEAKING) {
+        this._say(message, DISABLE_PUBLIC_SPEAKING ? false : isPublic);
+    }
+}
 
 managerContainer.init();
 
