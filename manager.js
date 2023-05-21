@@ -3,6 +3,8 @@ function Manager(name) {
     this.name = name;
 }
 
+let managerIndex = 0;
+
 Manager.prototype = {
     // Base methods that each manager should implement.
 
@@ -37,7 +39,7 @@ ManagerContainer.prototype = {
         this.managers.forEach(manager => manager.afterInit());
     },
     run: function() {
-        this.managers.forEach(manager => manager.run(Game));
+        this.managers.forEach(manager => manager.run());
     },
     getAll: function(caller) {
         return this.managers.filter(manager => manager != caller);

@@ -1,4 +1,5 @@
 const { Manager } = require("./manager");
+const { after } = require("./utils");
 
 function CommuteManager() {
     Manager.call(this, CommuteManager.name);
@@ -7,15 +8,17 @@ function CommuteManager() {
 const ROAD_BUILD_THRESHOLD = 100;
 
 // Zone update frequency.
-const ZONE_UPDATE_FREQUENCY = 10000;
+const ZONE_UPDATE_FREQUENCY = 100;
 
 CommuteManager.prototype = {
     ...Manager.prototype,
     init: function() {
-        this.positions = this.MemoryManager.register("positions", true, {
+        this.positions = this.MemoryManager.register("positions", {
             template: {
                 equals: (self, value) => value.x === self.x && value.y === self.y && value.room.name === self.room.name,
-                toRoomPosition: self => new RoomPosition(self.x, self.y, self.room.name),
+                toRoomPosition: self => {
+                    return new RoomPosition(self.x, self.y, self.room.name)
+                },
                 getOccupant: (self, ignoreRoads) => {
                     const structures = ignoreRoads ? this.e.nonRoadStructures : this.e.structures;
                     return this.e.exists(self.creep) ? self.creep : structures.find(structure => structure.room.name === self.room.name && structure.pos.x == self.x && structure.pos.y == self.y)
@@ -53,7 +56,7 @@ CommuteManager.prototype = {
                 attacks: 0
             }
         }).single();
-        this.zones = this.MemoryManager.register("zones", true, {
+        this.zones = this.MemoryManager.register("zones", {
             template: {
                 equal: (self, position) => self.x === position.x && self.y === position.y && self.room.name === position.room.name,
                 occupyNextPosition: (self, creep) => {
@@ -73,7 +76,9 @@ CommuteManager.prototype = {
                     const occupiedPositions = self.getPositions().filter(position => position.getOccupant(true));
                     return (self.positions.length - occupiedPositions.length) <= (ignoreReservations ? 0 : reservations);
                 },
-                getPositions: self => self.positions.map(index => this.positions.entries[index])
+                getPositions: self => {
+                    return self.positions.map(index => this.positions.entries[index])
+                }
             },
             defaults: {
                 room: {},
@@ -94,14 +99,26 @@ CommuteManager.prototype = {
                             self.target = target;
                             const terrain = target.room.getTerrain();
                             const startPosition = this.getPosition(target, terrain);
-                            const closestPosition = this.searchForClosest(startPosition, self.structureType);
-                            const orthogonal = structureType === STRUCTURE_ROAD ? false : true;
-                            const baseBlock = this.getBlock(closestPosition, self.structureType, orthogonal);
-                            let buildPositions = this.getBlock(baseBlock, 0, false, false).filter(position => position.terrain == 0);
-                            buildPositions =  buildPositions.sort((a, b) => a.toRoomPosition().getRangeTo(target) - b.toRoomPosition().getRangeTo(target));
+                            let foundPosition = false;
+                            const ignorePositions = [];
+                            let buildPositions = [];
+                            while(!foundPosition) {
+                                foundPosition = false;
+                                const closestPosition = this.searchForClosest(startPosition, self.structureType, ignorePositions);
+                                const orthogonal = structureType === STRUCTURE_ROAD ? false : true;
+                                const baseBlock = this.getBlock(closestPosition, self.structureType, orthogonal);
+                                buildPositions = this.getBlock(baseBlock, 0, false, false).filter(position => position.terrain == 0);
+                                buildPositions =  buildPositions.sort((a, b) => a.toRoomPosition().getRangeTo(target) - b.toRoomPosition().getRangeTo(target));
+                                if (buildPositions.length > 0) {
+                                    foundPosition = true;
+                                } else {
+                                    ignorePositions.push(...baseBlock);
+                                }
+                            }
                             self.positions = this.positionsToZone(buildPositions);
                         }
-                    }
+                    },
+                    regeneratePositions: self => self.generatePositions(self.target, self.structureType)
                 },
                 defaults: {
                     structureType: TERRAIN_MASK_WALL
@@ -112,7 +129,9 @@ CommuteManager.prototype = {
                     generatePositions: (self, target, range) => {
                         self.positions = this.positionsToZone(this.getOpenPositionsByRange(target, range));
                         self.target = target;
-                    }
+                        self.range = range;
+                    },
+                    regeneratePositions: self => self.generatePositions(self.target, self.range)
                 }
             },
             exits: {
@@ -120,7 +139,8 @@ CommuteManager.prototype = {
                     generatePositions: (self, target) => {
                         self.positions = this.positionsToZone(this.getExitPositions(target));
                         self.target = target;
-                    } 
+                    },
+                    regeneratePositions: self => self.generatePositions(self.target)
                 }
             }
         });
@@ -131,9 +151,7 @@ CommuteManager.prototype = {
         this.generateSafeZones();
         this.generateExitPositions();
         this.commuteCreeps();
-        if (!(Game.time % ZONE_UPDATE_FREQUENCY)) {
-            this.updateZones();
-        }
+        after(ZONE_UPDATE_FREQUENCY, () => this.updateZones());
     },
     commuteCreeps: function() {
         this.positions.entries.filter(position => position.isCommuting()).forEach(position => {
@@ -176,7 +194,7 @@ CommuteManager.prototype = {
         return newZone;
     },
     updateZones: function() {
-        this.zones.entries.forEach(zone => zone.generatePositions());
+        this.zones.entries.forEach(zone => zone.regeneratePositions());
     },
     getZones: function(target, type) {
         return this.zones.entries.filter(zone => zone.target == target && zone.name == type);
@@ -228,6 +246,30 @@ CommuteManager.prototype = {
                 this.positions.entries.push(position);
             }
             return position;
+        }
+    },
+    getHeatMapPosition(room, weightFunction) {
+        const terrain = room.getTerrain();
+        const totalWeight = this.positions.entries.map(position => weightFunction(position)).reduce((a, b) => a + b, 0);
+        if (totalWeight > 0) {
+            const pos = this.positions.entries.map(position => {
+                    const weight = weightFunction(position);
+                    if (weight > 0) {
+                        return new Array(weight).fill([position.x, position.y])
+                    }
+                })
+                .filter(x => x)
+                .reduce((a, b) => a.concat(b), [])
+                .reduce((a, b) => [a[0] + b[0], a[1] + b[1]], [0, 0])
+                .map(x => Math.round(x/totalWeight));
+            return this.searchForClosestBuildable(this.getPosition({
+                pos: {
+                    x: pos[0],
+                    y: pos[1]
+                },
+                room
+            }, terrain));
+
         }
     },
     getExitPositions: function(room) {
@@ -343,7 +385,22 @@ CommuteManager.prototype = {
         }
         return positions;
     },
-    searchForClosest: function(target, structureType) {
+    searchForClosestBuildable: function(target) {
+        let found = false;
+        let ignorePositions = [];
+        let closestPosition;
+        while(!found && ignorePositions < 200) {
+            closestPosition = this.searchForClosest(target, 0, ignorePositions);
+            if (!closestPosition.isBuildable()) {
+                ignorePositions.push(closestPosition);
+            } else {
+                found = true;
+            }
+        }
+        return found && closestPosition;
+    },
+    searchForClosest: function(target, structureType, ignorePositions) {
+        ignorePositions = ignorePositions || [];
         const terrain = target.room.getTerrain();
         let range = 1;
         while(range < 25) {
@@ -362,7 +419,7 @@ CommuteManager.prototype = {
                         room: target.room,
                         pos: position
                     }, terrain);
-                    if (!this.positionInZone(roomPosition)) {
+                    if (!this.positionInZone(roomPosition) && !ignorePositions.some(position => position.equals(roomPosition))) {
                         if (typeof(structureType) === "number") {
                             if (roomPosition.terrain === structureType) {
                                 return roomPosition;

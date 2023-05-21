@@ -1,39 +1,92 @@
 const { Manager } = require("./manager");
+const { log } = require("./utils");
 
-const ID_PATTERN = /[a-f0-9]{15}/;
-const NAME_PATTERN = /[A-Z]+\d+[A-Z]+\d+/;
+const MAX_SAVE_ENTRIES = 20;
+const REFERENCE_PATTERN = /^#([a-zA-Z]+)/;
+const REFERENCE_PROPERTY_FORMAT = property => `#${property}`;
 
-function Entry(name, template, defaults) {
+function Entry(e, name, template, defaults) {
+    this.e = e;
     this.name = name;
     this.template = template;
     this.defaults = defaults;
-    this.updateEntry({ ...template, ...defaults });
+    this.updateEntry({
+        ...template,
+        ...defaults
+    });
     this.data = {};
 }
 
 Entry.prototype = {
-    create: function (data) {
-        const entry = new Entry(this.name, this.template, this.defaults);
-        entry.data = { ...this.defaults, ...data };
-        const completeData = { ...this.template, ...entry.data };
+    create: function (data, index) {
+        const entry = new Entry(this.e, this.name, this.template, this.defaults);
+        entry.index = index || -1;
+        entry.data = {
+            ...this.defaults,
+            ...data
+        };
+        const completeData = {
+            ...this.template,
+            ...entry.data
+        };
+        entry.changed = false;
         entry.updateEntry(completeData);
         return entry;
     },
-    updateEntry: function(data) {
+    updateEntry: function (data) {
         const self = this;
+        if (this.__props == undefined) {
+            this.__props = {};
+        }
         Object.keys(data).forEach(key => {
-            const value = data[key];
-            this[key] = typeof(value) === "function" ? (...args) => value(self, ...args) : value;
+            let value = data[key];
+            this.__props[key] = typeof (value) === "function" ? (...args) => value(self, ...args) : value;
+            if (!this.hasOwnProperty(key)) {
+                Object.defineProperty(this, key, {
+                    get: () => {
+                        if (this.stale) {
+                            this.stale = false;
+                            if (this.e.isEntity(this.__props[key])) {
+                                this.__props[key] = this.e.refreshEntity(this.__props[key]);
+                            }
+                        }
+                        return this.__props[key];
+                    },
+                    set: newValue => {
+                        this.changed = true;
+                        this.__props[key] = newValue;
+                    }
+                });
+            }
         });
     },
-    fromMemory: function (properties, data) {
-        return this.create(properties.map((key, i) => ({ [key]: data[i] })).reduce((a, b) => ({...a, ...b}), {}));
+    fromMemory: function (index, properties, data) {
+        return this.create(properties.map((key, i) => {
+            const isEntity = REFERENCE_PATTERN.test(key);
+            const property = isEntity ? REFERENCE_PATTERN.exec(key)[1] : key;
+            const value = isEntity ? this.e.getEntityOrId(data[i]) : data[i];
+            return {
+                [property] : value
+            };
+        }).reduce((a, b) => ({
+            ...a,
+            ...b
+        }), {}), index);
     },
     toMemory: function (names, properties) {
-        return [names.indexOf(this.name), ...properties.map(key => this[key])];
+        return [this.index, names.indexOf(this.name), ...properties.map(key => {
+            const isReferenceKey = REFERENCE_PATTERN.test(key);
+            const property = isReferenceKey ? REFERENCE_PATTERN.exec(key)[1] : key;
+            const isEntity = this.e.isEntity(this[property]);
+            if (isReferenceKey != isEntity) {
+                this.e.clearCache();
+            }
+            return isEntity ? this.e.getEntityOrId(this[property]) : this[property];
+        })];
     },
-    properties: function() {
-        return Object.keys(this.data);
+    properties: function () {
+        const properties = Object.keys(this.data).map(key => this.e.isEntity(this.data[key]) ? REFERENCE_PROPERTY_FORMAT(key) : key);
+        return properties;
     }
 }
 
@@ -54,9 +107,9 @@ MemoryManager.prototype = {
             Memory.ids = [];
         }
     },
-    clear: function() {
+    clear: function () {
         Memory.collections = {};
-        Memory.ids = [];
+        this.e.clearCache();
     },
     load: function () {
         this.setup();
@@ -64,103 +117,82 @@ MemoryManager.prototype = {
         this.ids = Memory.ids;
         Object.keys(this.collections).forEach(key => {
             const collection = this.collections[key];
-            collection.entries = [];
             if (memory[key] == undefined) {
                 memory[key] = [];
             }
             const collectionMemory = memory[key];
-            if (collectionMemory.length >= 3) {
-                collection.properties = collectionMemory[0];
-                collection.idIndexes = collectionMemory[1];
-                collection.names = collectionMemory[2];
-                collection.entries = collectionMemory.slice(3);
-                if (collection.alwaysLoad) {
-                    collection.load();
-                }
+            if (collectionMemory.length >= 2) {
+                const properties = collectionMemory[0];
+                const names = collectionMemory[1];
+                collection.entries.push(...collectionMemory.slice(2).filter(entry => !collection.entries.some(x => x.index == entry[0])).map(entry => {
+                    const index = entry[0];
+                    const name = names[entry[1]];
+
+                    // Find and load entry.
+                    const template = collection.templates[name];
+                    if (template != undefined) {
+                        return template.fromMemory(index, properties, entry.slice(2));
+                    }
+                }).filter(x => x));
             }
         });
-    },
-    getReference(index) {
-        try {
-            const value = this.ids[index];
-            const isId = ID_PATTERN.test(value);
-            const reference = (isId || NAME_PATTERN.test(value)) ? this.e.get(value, !isId) : JSON.parse(value);
-            return reference || {};
-        } catch {
-            return {};
-        }
     },
     save: function () {
         this.setup();
-        const ids = [];
         const memory = Memory.collections;
         Object.keys(this.collections).forEach(key => {
             const collection = this.collections[key];
-            const entries = collection.entries;
+            const resolvedEntries = collection.entries;
+            let memoryEntries = memory[key].slice(3);
 
-            if (entries != undefined && entries.length > 0) {
-                const properties = collection.properties.length > 0 ? collection.properties : entries.map(entry => entry.properties())
-                    .reduce((a, b) => a.concat(b), [])
-                    .filter((x, i, a) => a.indexOf(x) == i);
+            if (resolvedEntries != undefined && resolvedEntries.length > 0) {
 
-                const names = collection.names.length > 0 ? collection.names : Object.keys(collection.templates).sort();
+                // Mark all existing entries as stale if they haven't changed.
+                resolvedEntries.forEach(entry => entry.stale = true);
+
+                const properties = this.e.cache(key, "properties", () => {
+                    const results = resolvedEntries.map(entry => entry.properties()).reduce((a, b) => a.concat(b), []).filter((x, i, a) => a.indexOf(x) == i);
+                    const referenceProperties = results.filter(x => REFERENCE_PATTERN.test(x)).map(x => REFERENCE_PATTERN.exec(x)[1]);
+                    return results.filter(x => !referenceProperties.includes(x));
+                });
+                
+                const names = this.e.cache(key, "names", () => Object.keys(collection.templates).sort());
 
                 if (properties.length > 0) {
-                    const storedValues = entries.filter(entry => Array.isArray(entry));
-                    const values = entries.filter(entry => !Array.isArray(entry)).map(entry => entry.toMemory(names, properties));
-                    let idIndexes = [];
+                    let currentIndex = Math.max(...memoryEntries.map(entry => entry[0]).concat(0));
+                    resolvedEntries.filter(entry => entry.index == -1).forEach(entry => {
+                        entry.index = ++currentIndex;
+                        entry.changed = true;
+                    });
 
-                    if (values.length > 0) {
-                        idIndexes = collection.idIndexes.length > 0 ? collection.idIndexes : values.map(value => value.map((x, i) => [x, i])
-                            .filter(x => typeof (x[0]) === "object")
-                            .map(x => x[1])).reduce((a, b) => a.concat(b), [])
-                            .filter((x, i, a) => a.indexOf(x) === i);
+                    const newMemoryEntries = resolvedEntries.filter(entry => entry.changed)
+                        .slice(0, MAX_SAVE_ENTRIES).map(entry => entry.toMemory(names, properties));
+
+                    if (newMemoryEntries.some(newEntry => newEntry[0] === -1)) {
+                        let currentIndex = Math.max(...memoryEntries.map(entry => entry[0]).concat(0));
+                        newMemoryEntries.filter(value => value[0] == -1).forEach(value => value[0] = ++currentIndex);
                     }
-
-                    values.forEach(value => {
-                        value.map((x, i) => [x, i]).filter((_x, i) => idIndexes.includes(i)).forEach(x => {
-                            if (x[0] != undefined) {
-                                let mapIndex;
-                                if ((x[0].id != undefined || x[0].name != undefined)) {
-                                    mapIndex = ids.indexOf(x[0].id || x[0].name);
-                                    if (mapIndex === -1) {
-                                        ids.push(x[0].id || x[0].name);
-                                        mapIndex = ids.length - 1;
-                                    }
-                                } else {
-                                    const value = JSON.stringify(x[0]);
-                                    mapIndex = ids.indexOf(value);
-                                    if (mapIndex === -1) {
-                                        ids.push(value);
-                                        mapIndex = ids.length - 1;
-                                    }
-                                }
-                                value[x[1]] = mapIndex;
-                            }
-                        });
-                    })
-
-                    memory[key] = [properties, idIndexes, names, ...values, ...storedValues];
+                    
+                    memoryEntries = memoryEntries.filter(entry => !newMemoryEntries.some(value => value[0] == entry[0]));
+                    memory[key] = [properties, names, ...memoryEntries, ...newMemoryEntries];
                 }
             }
         });
-        Memory.ids = ids;
     },
     // Registering collections should only happen in the init function.
-    register: function (name, alwaysLoad, { template, defaults }) {
-        this.collections[name] = new Collection(this, alwaysLoad, template, defaults);
+    register: function (name, {
+        template,
+        defaults
+    }) {
+        this.collections[name] = new Collection(this.e, template, defaults);
         return this.collections[name];
     }
 }
 
-function Collection(memoryManager, alwaysLoad, baseTemplate, baseDefaults) {
-    this.alwaysLoad = alwaysLoad;
+function Collection(e, baseTemplate, baseDefaults) {
+    this.e = e;
     this.templates = {};
     this.entries = [];
-    this.properties = [];
-    this.memoryManager = memoryManager;
-    this.names = [];
-    this.idIndexes = [];
     this.baseTemplate = baseTemplate;
     this.baseDefaults = baseDefaults;
 }
@@ -174,39 +206,23 @@ Collection.prototype = {
             return this.templates.single.create(args[0]);
         }
     },
-    single: function() {
-        this.templates.single = new Entry("single", this.baseTemplate, this.baseDefaults);
+    single: function () {
+        this.templates.single = new Entry(this.e, "single", this.baseTemplate, this.baseDefaults);
         return this;
-    },
-    load: function(entry) {
-        if (entry != undefined) {
-            const index = this.entries.findIndex(x => x == entry);
-            if (Array.isArray(entry)) {
-                const name = this.names[entry[0]];
-    
-                // Resolve game object ids.
-                this.idIndexes.forEach(index => entry[index] = this.memoryManager.getReference(entry[index]));
-    
-                // Find and load entry.
-                const template = this.templates[name];
-                if (template != undefined) {
-                    const loadedEntry = template.fromMemory(this.properties, entry.slice(1));
-                    this.entries[index] = loadedEntry;
-                }
-            } else {
-                return entry;
-            }
-        } else {
-            this.entries.forEach(entry => this.load(entry));
-        }
     },
     register: function (data) {
         Object.keys(data).forEach(key => {
             const entry = data[key];
             if (entry != undefined && entry.template != undefined) {
-                const template = { ...this.baseTemplate, ...(entry.template || {}) };
-                const defaults = { ...this.baseDefaults, ...(entry.defaults || {}) };
-                this.templates[key] = new Entry(key, template, defaults);
+                const template = {
+                    ...this.baseTemplate,
+                    ...(entry.template || {})
+                };
+                const defaults = {
+                    ...this.baseDefaults,
+                    ...(entry.defaults || {})
+                };
+                this.templates[key] = new Entry(this.e, key, template, defaults);
             }
         });
     }

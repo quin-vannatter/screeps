@@ -10,7 +10,7 @@ function CreepManager(...services) {
 CreepManager.prototype = {
     ...Manager.prototype,
     init: function() {
-        this.creeps = this.MemoryManager.register("creeps", true, {
+        this.creeps = this.MemoryManager.register("creeps", {
             template: {
                 isIdle: self => !this.TaskManager.tasks.entries.some(task => task.creep == self.creep)
             },

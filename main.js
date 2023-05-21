@@ -7,9 +7,12 @@ const { StructureManager } = require("./structure-manager");
 const { MemoryManager } = require("./memory-manager");
 const { CommuteManager } = require("./commute-manager");
 const { e } = require("./entity-manager");
+const { CombatManager } = require("./combat-manager");
+const { log } = require("./utils");
 
+const DISABLE_RUNNING = false;
 const DISABLE_MEMORY = false;
-const DISABLE_SPEAKING = false;
+const DISABLE_SPEAKING = true;
 const DISABLE_PUBLIC_SPEAKING = true;
 
 // The order of this list determines execution order.
@@ -22,6 +25,7 @@ const managerContainer = new ManagerContainer([
     ControllerManager,
     CreepManager,
     SpawnManager,
+    CombatManager,
     TaskManager
 ]);
 
@@ -33,6 +37,7 @@ Creep.prototype.say = function(message, isPublic) {
 }
 
 managerContainer.init();
+let usedCpu = 0;
 
 module.exports.loop = function() {
     try {
@@ -40,13 +45,23 @@ module.exports.loop = function() {
             MemoryManager.load();
         } else {
             MemoryManager.clear();
+            e.clearCache();
         }
-        managerContainer.run();
+        if (!DISABLE_RUNNING) {
+            if (usedCpu < Game.cpu.limit) {
+                managerContainer.run();
+            } else {
+                log("CPU Limit Reached", `${Math.round(usedCpu / Game.cpu.limit * 100)}%`);
+            }
+        }
         if(!DISABLE_MEMORY) {
             MemoryManager.save();
         }
-    } catch(e) {
+    } catch(exception) {
         MemoryManager.clear();
-        throw e;
+        e.clearCache();
+        throw exception;
+    } finally {
+        usedCpu = Game.cpu.getUsed();
     }
 };

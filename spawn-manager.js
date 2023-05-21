@@ -1,4 +1,5 @@
 const { Manager } = require("./manager");
+const { log } = require("./utils");
 
 const NAMES = [
     "Bustamante",
@@ -60,25 +61,16 @@ SpawnManager.prototype = {
     run: function() {
         this.handleExtensions();
     },
-    requestCreep: function (tasks, idleCreeps) {
+    requestCreep: function (tasks) {
         const threshold = 100 - (100 * Math.pow(SPAWN_PERCENT_MODIFIER, this.e.creeps.length));
-        const idleCreepBodyParts = idleCreeps
-            .map(creep => creep && creep.body.map(bodyPart => bodyPart.type) || [])
-            .reduce((a, b) => a.concat(b), []);
         const spawns = this.e.spawns;
-        let bodyParts = this.getBodyParts(tasks, idleCreepBodyParts);
+        let bodyParts = this.getBodyParts(tasks);
         while(!this.requestCreepForTasks(bodyParts, spawns, threshold) && bodyParts.length > 0) {
             bodyParts.pop();
         }
     },
-    getBodyParts: function (tasks, idleCreepBodyParts) {
-        const bodyParts = tasks.filter(x => x).map(task => task.bodyParts).reduce((a, b) => a.concat(b), []);
-        idleCreepBodyParts.forEach(bodyPart => {
-            const index = bodyParts.indexOf(bodyPart);
-            if (index != -1) {
-                bodyParts.splice(index, 1);
-            }
-        });
+    getBodyParts: function (tasks) {
+        const bodyParts = tasks.map(task => task.bodyParts).reduce((a, b) => a.concat(b), []).filter(x => x);
         const results = [];
         const bodyPartMap = Object.keys(BODYPART_COST);
         let i = 0;
@@ -120,7 +112,7 @@ SpawnManager.prototype = {
             const zones = sources.map(source => {
                 const zones = this.CommuteManager.getZones(source, "hug").filter(zone => !zone.isFull());
                 if (zones.length == 0) {
-                    zones.push(this.CommuteManager.createZone("hug", source, TERRAIN_MASK_WALL))
+                    zones.push(this.CommuteManager.createZone("hug", source, TERRAIN_MASK_WALL));
                 }
                 return zones;
             }).reduce((a, b) => a.concat(b), []);
@@ -176,7 +168,7 @@ SpawnManager.prototype = {
         }
         name = number == 1 ? name : `${name} the ${number}${suffix}`;
         if(spawn.spawnCreep(bodyParts, name) == OK) {
-            console.log(`Spawning ${name}.`);
+            log("Spawning Creep", name);
         }
     },
     usingRoads: function() {
