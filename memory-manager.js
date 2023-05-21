@@ -85,8 +85,7 @@ Entry.prototype = {
         })];
     },
     properties: function () {
-        const properties = Object.keys(this.data).map(key => this.e.isEntity(this.data[key]) ? REFERENCE_PROPERTY_FORMAT(key) : key);
-        return properties;
+        return Object.keys(this.data).map(key => this.e.isEntity(this[key]) ? REFERENCE_PROPERTY_FORMAT(key) : key);
     }
 }
 
@@ -99,16 +98,13 @@ function MemoryManager() {
 MemoryManager.prototype = {
     ...Manager.prototype,
     setup: function () {
-        this.e.clear();
         if (Memory.collections == undefined) {
             Memory.collections = {};
-        }
-        if (Memory.ids == undefined) {
-            Memory.ids = [];
         }
     },
     clear: function () {
         Memory.collections = {};
+        Memory.ids = [];
         this.e.clearCache();
     },
     load: function () {
@@ -143,18 +139,16 @@ MemoryManager.prototype = {
         Object.keys(this.collections).forEach(key => {
             const collection = this.collections[key];
             const resolvedEntries = collection.entries;
-            let memoryEntries = memory[key].slice(3);
+            let memoryEntries = memory[key] && memory[key].slice(2) || [];
 
             if (resolvedEntries != undefined && resolvedEntries.length > 0) {
 
                 // Mark all existing entries as stale if they haven't changed.
                 resolvedEntries.forEach(entry => entry.stale = true);
 
-                const properties = this.e.cache(key, "properties", () => {
-                    const results = resolvedEntries.map(entry => entry.properties()).reduce((a, b) => a.concat(b), []).filter((x, i, a) => a.indexOf(x) == i);
-                    const referenceProperties = results.filter(x => REFERENCE_PATTERN.test(x)).map(x => REFERENCE_PATTERN.exec(x)[1]);
-                    return results.filter(x => !referenceProperties.includes(x));
-                });
+                let properties = resolvedEntries.map(entry => entry.properties()).reduce((a, b) => a.concat(b), []).filter((x, i, a) => a.indexOf(x) == i);
+                const referenceProperties = properties.filter(x => REFERENCE_PATTERN.test(x)).map(x => REFERENCE_PATTERN.exec(x)[1]);
+                properties = properties.filter(x => !referenceProperties.includes(x));
                 
                 const names = this.e.cache(key, "names", () => Object.keys(collection.templates).sort());
 
@@ -178,6 +172,7 @@ MemoryManager.prototype = {
                 }
             }
         });
+        this.e.clear();
     },
     // Registering collections should only happen in the init function.
     register: function (name, {

@@ -118,7 +118,7 @@ SpawnManager.prototype = {
             }).reduce((a, b) => a.concat(b), []);
             zones.forEach(zone => {
                 const position = zone.getNextPosition();
-                if (!constructionSites.some(x => x.pos.x == position.x && x.pos.y == position.y)) {
+                if (position && !constructionSites.some(x => x.pos.x == position.x && x.pos.y == position.y)) {
                     position.toRoomPosition().createConstructionSite(STRUCTURE_EXTENSION);
                 }
             })

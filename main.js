@@ -12,7 +12,7 @@ const { log } = require("./utils");
 
 const DISABLE_RUNNING = false;
 const DISABLE_MEMORY = false;
-const DISABLE_SPEAKING = true;
+const DISABLE_SPEAKING = false;
 const DISABLE_PUBLIC_SPEAKING = true;
 
 // The order of this list determines execution order.

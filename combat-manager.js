@@ -26,9 +26,9 @@ CombatManager.prototype = {
         });
     },
     run: function() {
-        //this.inCombat = this.e.rooms.map(room => [room.name, this.e.hostiles.some(hostile => hostile.room == room)]).reduce((a, b) => ({ ...a, [b[0]]: b[1] }), {});
-        //this.handleTowers();
-        //this.handleDefense();
+        this.inCombat = this.e.rooms.map(room => [room.name, this.e.hostiles.some(hostile => hostile.room == room)]).reduce((a, b) => ({ ...a, [b[0]]: b[1] }), {});
+        this.handleTowers();
+        this.handleDefense();
     },
     handleDefense: function() {
         this.e.rooms.forEach(room => {

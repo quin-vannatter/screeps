@@ -77,7 +77,7 @@ CommuteManager.prototype = {
                     return (self.positions.length - occupiedPositions.length) <= (ignoreReservations ? 0 : reservations);
                 },
                 getPositions: self => {
-                    return self.positions.map(index => this.positions.entries[index])
+                    return self.positions.map(index => this.positions.entries[index]).filter(x => x);
                 }
             },
             defaults: {
