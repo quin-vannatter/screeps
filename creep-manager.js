@@ -52,7 +52,7 @@ CreepManager.prototype = {
                     },
                     canExecute: (self, creep) => {
                         const freeCapacity = creep.store.getFreeCapacity(RESOURCE_ENERGY);
-                        if (Object.keys(self.destination).length > 0) {
+                        if (this.e.exists(self.destination)) {
                             const amount = self.destination.amount != undefined ? self.destination.amount : self.destination.store[RESOURCE_ENERGY];
                             return (freeCapacity > 0 || freeCapacity == null) && (amount / freeCapacity * 100) >= FETCH_AMOUNT_THRESHOLD;
                         } else {

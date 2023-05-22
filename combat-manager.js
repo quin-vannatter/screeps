@@ -1,4 +1,5 @@
 const { Manager } = require("./manager");
+const { stringify } = require("./utils");
 
 function CombatManager() {
     Manager.call(this, CombatManager.name);

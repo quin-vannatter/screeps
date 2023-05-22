@@ -6,6 +6,10 @@ const CONSOLE_COLOURS = [
     "#b9b3ff",
     "#fcb3ff",
     "#ffb3d1",
+];
+
+const IGNORED_PROPERTIES = [
+    "e"
 ]
 
 module.exports = {
@@ -18,5 +22,13 @@ module.exports = {
         if(!(Game.time % freq)) {
             fn();
         }
+    },
+    stringify: (value) => {
+        const refs = [];
+        return JSON.stringify(value,  (key, value) => {
+            if (!IGNORED_PROPERTIES.includes(key)) {
+                return value
+            }
+        });
     }
 }

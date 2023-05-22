@@ -1,5 +1,5 @@
 const { Manager } = require("./manager");
-const { after } = require("./utils");
+const { after, stringify } = require("./utils");
 
 function CommuteManager() {
     Manager.call(this, CommuteManager.name);
@@ -16,9 +16,7 @@ CommuteManager.prototype = {
         this.positions = this.MemoryManager.register("positions", {
             template: {
                 equals: (self, value) => value.x === self.x && value.y === self.y && value.room.name === self.room.name,
-                toRoomPosition: self => {
-                    return new RoomPosition(self.x, self.y, self.room.name)
-                },
+                toRoomPosition: self => new RoomPosition(self.x, self.y, self.room.name),
                 getOccupant: (self, ignoreRoads) => {
                     const structures = ignoreRoads ? this.e.nonRoadStructures : this.e.structures;
                     return this.e.exists(self.creep) ? self.creep : structures.find(structure => structure.room.name === self.room.name && structure.pos.x == self.x && structure.pos.y == self.y)
@@ -75,7 +73,9 @@ CommuteManager.prototype = {
                     const reservations = this.TaskManager.tasks.entries.filter(task => task.destination == self.target).length;
                     const occupiedPositions = self.getPositions().filter(position => position.getOccupant(true));
                     return (self.positions.length - occupiedPositions.length) <= (ignoreReservations ? 0 : reservations);
-                },
+                }
+            },
+            transient: {
                 getPositions: self => {
                     return self.positions.map(index => this.positions.entries[index]).filter(x => x);
                 }
@@ -85,7 +85,7 @@ CommuteManager.prototype = {
                 positions: [],
                 target: {}
             }
-        })
+        });
     },
     afterInit: function() {
         this.zones.register({

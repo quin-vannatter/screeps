@@ -45,7 +45,6 @@ module.exports.loop = function() {
             MemoryManager.load();
         } else {
             MemoryManager.clear();
-            e.clearCache();
         }
         if (!DISABLE_RUNNING) {
             if (usedCpu < Game.cpu.limit) {
@@ -59,7 +58,6 @@ module.exports.loop = function() {
         }
     } catch(exception) {
         MemoryManager.clear();
-        e.clearCache();
         throw exception;
     } finally {
         usedCpu = Game.cpu.getUsed();

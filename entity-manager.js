@@ -1,11 +1,7 @@
 const {
     Manager
 } = require("./manager");
-const {
-    after
-} = require("./utils");
 
-const CLEAR_CACHE_FREQUENCY = 10;
 const ID_PATTERN = /[a-f0-9]{15}/;
 const NAME_PATTERN = /[A-Z]+\d+[A-Z]+\d+/;
 
@@ -33,8 +29,6 @@ function EntityManager(...services) {
     }
 
     this.entityReferences = {};
-    this.cacheValue = {};
-    this.cacheIndex = 0;
 
     Object.keys(entityMapping).forEach(key => {
         Object.defineProperty(this, key, {
@@ -45,7 +39,7 @@ function EntityManager(...services) {
                 const propName = `__${key}`;
                 if (this.props[propName] == undefined) {
                     this.props[propName] = entityMapping[key]();
-                    this.props[propName] = this.props[propName].map(entity => this.getEntityOrId(entity.id || entity.name));
+                    this.props[propName] = this.props[propName].map(entity => this.getEntity(entity.id || entity.name));
                 }
                 return this.props[propName];
             }
@@ -58,67 +52,34 @@ EntityManager.prototype = {
     exists: function (entity) {
         return Object.keys(entity || {}).length > 0;
     },
-    isEntity: function(arg) {
-        if (typeof(arg) === "string") {
-            return ID_PATTERN.test(arg) || NAME_PATTERN.test(arg);
-        } else if (arg != undefined && typeof(arg) === "object") {
-            return ID_PATTERN.test(arg.id) || NAME_PATTERN.test(arg.name);
-        }
-        return false;
+    isEntityId: function(id) {
+        return ID_PATTERN.test(id) || NAME_PATTERN.test(id);
     },
-    getEntityOrId: function (arg) {
-        if (typeof(arg) === "number" && Memory.ids[arg] != undefined) {
-            arg = Memory.ids[arg];
-        }
-        if (typeof(arg) === "string" && this.isEntity(arg)) {
-            const isId = ID_PATTERN.test(arg);
-            let value = this.entityReferences[arg];
-            if (value == undefined) {
-                value = !isId ? Game.rooms[arg] : Game.getObjectById(arg);
-                if (value != undefined) {
-                    this.entityReferences[arg] = value;
-                }
+    isEntity: function(entity) {
+        return (entity != undefined && typeof(entity) === "object") && (ID_PATTERN.test(entity.id) || NAME_PATTERN.test(entity.name));
+    },
+    getEntity: function (id) {
+        const isId = ID_PATTERN.test(id);
+        let value = this.entityReferences[id];
+        if (value == undefined) {
+            value = !isId ? Game.rooms[id] : Game.getObjectById(id);
+            if (value != undefined) {
+                this.entityReferences[id] = value;
             }
-            return value;
-        } else if (arg != undefined && typeof(arg) === "object" && this.isEntity(arg)) {
-            const id = arg.id || arg.name;
-            let index = Memory.ids.indexOf(id);
-            if (index == -1) {
-                index = Memory.ids.length;
-                Memory.ids.push(id);
-            }
-            return index;
         }
+        return value;
     },
-    refreshEntity: function(arg) {
-        
-        // Yes, the function toggles between index and entity. This looks weird, I know.
-        return this.getEntityOrId(this.getEntityOrId(arg));
+    getId: function(entity) {
+        return entity.id || entity.name;
     },
-    cache: function (key, property, defaultFn) {
-        if (this.cacheValue[key] == undefined) {
-            this.cacheValue[key] = {};
-        }
-        if (this.cacheValue[key][property] == undefined) {
-            this.cacheValue[key][property] = defaultFn();
-        }
-        return this.cacheValue[key][property];
+    refreshEntity: function(entity) {
+        return this.getEntity(this.getId(entity));
     },
     clear: function () {
         this.entityReferences = {};
     },
-    clearCache: function() {
-        this.cacheValue = {};
-    },
     run: function () {
         this.props = {};
-        if (Memory.ids == undefined) {
-            Memory.ids = [];
-        }
-        after(CLEAR_CACHE_FREQUENCY, () => {
-            const keys = Object.keys(this.cache);
-            this.cacheValue[keys[this.cacheIndex++ % keys.length]] = {};
-        });
     }
 }
 
