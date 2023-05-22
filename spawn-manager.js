@@ -58,8 +58,8 @@ SpawnManager.prototype = {
             }
         });
     },
-    run: function() {
-        this.handleExtensions();
+    run: function(room) {
+        this.handleExtensions(room);
     },
     requestCreep: function (tasks) {
         const threshold = 100 - (100 * Math.pow(SPAWN_PERCENT_MODIFIER, this.e.creeps.length));
@@ -103,29 +103,27 @@ SpawnManager.prototype = {
         }
         return false;
     },
-    handleExtensions: function() {
+    handleExtensions: function(room) {
 
         // Create new extensions.
-        this.e.spawns.map(spawn => spawn.room).forEach(room => {
-            const sources = this.e.sources.filter(source => source.room.name === room.name)
-            const constructionSites = this.e.constructionSites.filter(constructionSite => constructionSite.room.name == room.name);
-            const zones = sources.map(source => {
-                const zones = this.CommuteManager.getZones(source, "hug").filter(zone => !zone.isFull());
-                if (zones.length == 0) {
-                    zones.push(this.CommuteManager.createZone("hug", source, TERRAIN_MASK_WALL));
-                }
-                return zones;
-            }).reduce((a, b) => a.concat(b), []);
-            zones.forEach(zone => {
-                const position = zone.getNextPosition();
-                if (position && !constructionSites.some(x => x.pos.x == position.x && x.pos.y == position.y)) {
-                    position.toRoomPosition().createConstructionSite(STRUCTURE_EXTENSION);
-                }
-            })
-        });
+        const sources = this.e.sources.filter(source => source.room.name === room.name)
+        const constructionSites = this.e.constructionSites.filter(constructionSite => constructionSite.room.name == room.name);
+        const zones = sources.map(source => {
+            const zones = this.CommuteManager.getZones(source, "hug");
+            if (zones.length == 0) {
+                zones.push(this.CommuteManager.createZone("hug", { target: source, structureType: TERRAIN_MASK_WALL }));
+            }
+            return zones;
+        }).reduce((a, b) => a.concat(b), []).filter(x => x);
+        zones.forEach(zone => {
+            const position = zone.getNextPosition();
+            if (position && !constructionSites.some(x => x.pos.x == position.x && x.pos.y == position.y)) {
+                position.toRoomPosition().createConstructionSite(STRUCTURE_EXTENSION);
+            }
+        })
 
         // Make sure extensions are full.
-        this.e.structures.filter(structure => structure.structureType === STRUCTURE_EXTENSION)
+        this.e.structures.filter(structure => structure.room == room && structure.structureType === STRUCTURE_EXTENSION)
             .filter(structure => {
                 const freeCapacity = structure.store.getFreeCapacity(RESOURCE_ENERGY);
                 return freeCapacity == null || freeCapacity > 0

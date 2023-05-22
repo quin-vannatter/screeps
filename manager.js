@@ -1,9 +1,9 @@
+const { cpuLimitReached } = require("./utils");
+
 // Manager.
 function Manager(name) {
     this.name = name;
 }
-
-let managerIndex = 0;
 
 Manager.prototype = {
     // Base methods that each manager should implement.
@@ -27,19 +27,32 @@ Manager.prototype = {
 };
 
 // Manager Container
-function ManagerContainer(managers) {
+function ManagerContainer(managers, e) {
     this.name = ManagerContainer.name;
     this.managers = managers;
+    this.e = e;
 }
 
 ManagerContainer.prototype = {
     init: function() {
-        this.managers.forEach(manager => manager.registerManagers([...this.managers, this]));
+        this.managers.forEach(manager => manager.registerManagers([...this.managers, this.e, this]));
         this.managers.forEach(manager => manager.init());
         this.managers.forEach(manager => manager.afterInit());
+        this.roomIndex = 0;
     },
     run: function() {
-        this.managers.forEach(manager => manager.run());
+        const rooms = this.e.rooms;
+        let ranRoomCount = 0;
+        while(!cpuLimitReached() && ranRoomCount < rooms.length) {
+            this.managers.forEach(manager => {
+                manager.run(rooms[this.roomIndex]);
+                if (cpuLimitReached()) {
+                    return;
+                }
+            });
+            this.roomIndex = (this.roomIndex + 1) % rooms.length;
+            ranRoomCount++;
+        }
     },
     getAll: function(caller) {
         return this.managers.filter(manager => manager != caller);

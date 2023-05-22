@@ -67,7 +67,7 @@ EntityManager.prototype = {
                 this.entityReferences[id] = value;
             }
         }
-        return value;
+        return value != undefined ? value : {};
     },
     getId: function(entity) {
         return entity.id || entity.name;
@@ -76,10 +76,8 @@ EntityManager.prototype = {
         return this.getEntity(this.getId(entity));
     },
     clear: function () {
-        this.entityReferences = {};
-    },
-    run: function () {
         this.props = {};
+        this.entityReferences = {};
     }
 }
 

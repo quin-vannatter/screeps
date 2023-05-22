@@ -101,15 +101,17 @@ CreepManager.prototype = {
             }
         });
     },
-    run: function() {
+    run: function(room) {
         // Check to see if there's resources on the ground somewhere.
         const droppedResources = this.e.droppedResources.concat(this.e.tombstones.filter(tombstone => tombstone.pos != undefined && tombstone.store[RESOURCE_ENERGY] > 0))
-            .reduce((a, b) => a.concat(b), []);
+            .reduce((a, b) => a.concat(b), []).filter(target => target.room == room);
         droppedResources.forEach(resource => this.TaskManager.getAndSubmitTask("fetchDroppedResource", { destination: resource }));
 
         // Ensure we remove dead creeps from our memory and add new creeps.
-        this.creeps.entries = this.creeps.entries.filter(creep => this.e.exists(creep))
-            .concat(this.e.creeps.filter(creep => !this.creeps.entries.some(x => x.creep == creep)).map(creep => this.creeps.create({ creep, hits: creep.hits })));
+        this.creeps.entries = this.creeps.entries.filter(creep => this.e.exists(creep) && creep.my);
+
+        this.creeps.entries.push(...this.e.creeps.filter(creep => !this.creeps.entries.some(x => x.creep == creep) && creep.my)
+            .map(creep => this.creeps.create({ creep, hits: creep.hits })));
 
         // Record any attacks
         this.creeps.entries.filter(entry => entry.hits > entry.creep.hits).forEach(entry => this.CommuteManager.recordAttack(entry.creep));

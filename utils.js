@@ -1,3 +1,5 @@
+
+
 const CONSOLE_COLOURS = [
     "#ffb8b3",
     "#fffeb3",
@@ -8,14 +10,10 @@ const CONSOLE_COLOURS = [
     "#ffb3d1",
 ];
 
-const IGNORED_PROPERTIES = [
-    "e"
-]
-
-module.exports = {
+const fns = {
     log: (...args) => {
         const seed = args.length > 0 ? (args[0].split("").map(x => x.charCodeAt(0)).reduce((a, b) => a + b, 0) % CONSOLE_COLOURS.length) : 0;
-        args = args.map((arg, i) => `<span style="color:${CONSOLE_COLOURS[((i+1)*seed) % CONSOLE_COLOURS.length]}">${arg}</span>`);
+        args = args.map((arg, i) => `<span style="color:${CONSOLE_COLOURS[((i+seed)*seed) % CONSOLE_COLOURS.length]}">${arg}</span>`);
         console.log(`[${args.shift()}]: ${args.join(" ")}`)
     },
     after: (freq, fn) => {
@@ -23,12 +21,15 @@ module.exports = {
             fn();
         }
     },
-    stringify: (value) => {
-        const refs = [];
-        return JSON.stringify(value,  (key, value) => {
-            if (!IGNORED_PROPERTIES.includes(key)) {
-                return value
-            }
-        });
+    cpuLimitReached: () => {
+        const cpuUsed = Game.cpu.getUsed();
+        const cpuTotal = Game.cpu.limit;
+        const reachedLimit = cpuUsed >= cpuTotal
+        if (reachedLimit) {
+            fns.log("CPU Limit Reached", `${Math.round(cpuUsed / cpuTotal * 100)}%`);
+        }
+        return reachedLimit;
     }
 }
+
+module.exports = fns;

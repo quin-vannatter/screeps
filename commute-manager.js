@@ -25,9 +25,7 @@ CommuteManager.prototype = {
                     self.creep = creep;
                     self.range = range != undefined ? range : 1;
                 },
-                vacate: self => {
-                    self.creep = {};
-                },
+                vacate: self => self.creep = {},
                 isBuildable: self => {
                     const occupant = self.getOccupant();
                     return self.terrain != TERRAIN_MASK_WALL && (occupant == undefined || occupant.structureType === STRUCTURE_ROAD);
@@ -38,9 +36,7 @@ CommuteManager.prototype = {
                         self.lastCreep = creep;
                     }
                 },
-                recordAttack: self => {
-                    self.attacks++;
-                },
+                recordAttack: self => self.attacks++,
                 isCommuting: self => this.e.exists(self.creep) && (!self.creep.pos.x !== self.x || self.creep.pos.y !== self.y)
             },
             defaults: {
@@ -64,11 +60,7 @@ CommuteManager.prototype = {
                         return position;
                     }
                 },
-                reserveNextPosition: self => self.reservations++,
-                getNextPosition: (self, ignoreRoads) => {
-                    const position = self.getPositions().find(position => !position.getOccupant(ignoreRoads));
-                    return position;
-                },
+                getNextPosition: (self, ignoreRoads) => self.getPositions().find(position => !position.getOccupant(ignoreRoads)),
                 isFull: (self, ignoreReservations) => {
                     const reservations = this.TaskManager.tasks.entries.filter(task => task.destination == self.target).length;
                     const occupiedPositions = self.getPositions().filter(position => position.getOccupant(true));
@@ -76,14 +68,13 @@ CommuteManager.prototype = {
                 }
             },
             transient: {
-                getPositions: self => {
-                    return self.positions.map(index => this.positions.entries[index]).filter(x => x);
-                }
+                getPositions: self => self.positions.map(index => this.positions.entries[index]).filter(x => x)
             },
             defaults: {
                 room: {},
                 positions: [],
-                target: {}
+                target: {},
+                isLocked: false
             }
         });
     },
@@ -91,69 +82,65 @@ CommuteManager.prototype = {
         this.zones.register({
             hug: {
                 template: {
-                    generatePositions: (self, target, structureType) => {
-                        if (structureType) {
-                            self.structureType = structureType;
-                        }
-                        if (target.pos != undefined) {
-                            self.target = target;
-                            const terrain = target.room.getTerrain();
-                            const startPosition = this.getPosition(target, terrain);
-                            let foundPosition = false;
+                    generatePositions: self => {
+                        self.positions = [];
+                        if (self.target.pos != undefined) {
+                            const terrain = self.target.room.getTerrain();
+                            const startPosition = this.getPosition(self.target, terrain);
+                            let found = false;
                             const ignorePositions = [];
                             let buildPositions = [];
-                            while(!foundPosition) {
-                                foundPosition = false;
+                            while(!found) {
+                                found = false;
                                 const closestPosition = this.searchForClosest(startPosition, self.structureType, ignorePositions);
-                                const orthogonal = structureType === STRUCTURE_ROAD ? false : true;
+                                const orthogonal = self.structureType === STRUCTURE_ROAD ? false : true;
                                 const baseBlock = this.getBlock(closestPosition, self.structureType, orthogonal);
                                 buildPositions = this.getBlock(baseBlock, 0, false, false).filter(position => position.terrain == 0);
-                                buildPositions =  buildPositions.sort((a, b) => a.toRoomPosition().getRangeTo(target) - b.toRoomPosition().getRangeTo(target));
+                                buildPositions =  buildPositions.sort((a, b) => a.toRoomPosition().getRangeTo(self.target) - b.toRoomPosition().getRangeTo(self.target));
                                 if (buildPositions.length > 0) {
-                                    foundPosition = true;
+                                    found = true;
                                 } else {
                                     ignorePositions.push(...baseBlock);
                                 }
                             }
                             self.positions = this.positionsToZone(buildPositions);
                         }
-                    },
-                    regeneratePositions: self => self.generatePositions(self.target, self.structureType)
+                    }
                 },
                 defaults: {
                     structureType: TERRAIN_MASK_WALL
+                },
+                transient: {
+                    getSignature: self => `${self.target.id}${self.structureType}`
                 }
             },
             safe: {
                 template: {
-                    generatePositions: (self, target, range) => {
-                        self.positions = this.positionsToZone(this.getOpenPositionsByRange(target, range));
-                        self.target = target;
-                        self.range = range;
-                    },
-                    regeneratePositions: self => self.generatePositions(self.target, self.range)
+                    generatePositions: self => self.positions = this.positionsToZone(this.getOpenPositionsByRange(self.target, self.range))
+                },
+                transient: {
+                    getSignature: self => `${self.target.id}${self.range}`
                 }
             },
             exits: {
                 template: {
-                    generatePositions: (self, target) => {
-                        self.positions = this.positionsToZone(this.getExitPositions(target));
-                        self.target = target;
-                    },
-                    regeneratePositions: self => self.generatePositions(self.target)
+                    generatePositions: self => self.positions = this.positionsToZone(this.getExitPositions(self.target))
+                },
+                transient: {
+                    getSignature: self => `${self.target.name}`
                 }
             }
         });
     },
-    run: function() {
-        this.recordPresence();
-        this.handleRoadConstruction();
-        this.generateSafeZones();
-        this.generateExitPositions();
-        this.commuteCreeps();
-        after(ZONE_UPDATE_FREQUENCY, () => this.updateZones());
+    run: function(room) {
+        this.recordPresence(room);
+        this.handleRoadConstruction(room);
+        this.generateSafeZones(room);
+        this.generateExitPositions(room);
+        this.commuteCreeps(room);
+        after(ZONE_UPDATE_FREQUENCY, () => this.updateZones(room));
     },
-    commuteCreeps: function() {
+    commuteCreeps: function(room) {
         this.positions.entries.filter(position => position.isCommuting()).forEach(position => {
             try {
                 position.creep.moveTo(position.toRoomPosition());
@@ -187,14 +174,24 @@ CommuteManager.prototype = {
         const position = this.positions.entries.find(position => position.creep == creep);
         return position != undefined && !position.isCommuting();
     },
-    createZone: function(type, ...args) {
-        const newZone = this.zones.create(type, {});
-        newZone.generatePositions(...args);
-        this.zones.entries.push(newZone);
-        return newZone;
+    createZone: function(type, data) {
+        const newZone = this.zones.create(type, data);
+        const matchingZones = this.zones.entries.filter(zone => zone.getSignature() === newZone.getSignature());
+        if (matchingZones.length == 0 || matchingZones.every(zone => !zone.isLocked)) {
+            newZone.generatePositions();
+            if (newZone.positions.length > 0) {
+                this.zones.entries.push(newZone);
+                return newZone;
+            } else {
+                // If the zone has no positions, lock the zone.
+                this.zones.entries
+                    .filter(zone => zone.name == newZone.name && zone.getSignature() === newZone.getSignature())
+                    .forEach(zone => zone.isLocked = true);
+            }
+        }
     },
     updateZones: function() {
-        this.zones.entries.forEach(zone => zone.regeneratePositions());
+        this.zones.entries.forEach(zone => zone.generatePositions());
     },
     getZones: function(target, type) {
         return this.zones.entries.filter(zone => zone.target == target && zone.name == type);
@@ -213,33 +210,32 @@ CommuteManager.prototype = {
     positionsToZone: function(positions) {
         return positions.map(position => this.positions.entries.findIndex(entry => entry == position));
     },
-    generateSafeZones: function() {
+    generateSafeZones: function(room) {
         // Generate safe positions for sources, spawns and controllers.
-        const newTargets = this.e.rooms.map(room => [...this.e.sources, ...this.e.spawns, room.controller])
-            .reduce((a, b) => a.concat(b), [])
-            .filter(entity => !this.zones.entries.some(zone => zone.name === "safe" && zone.target == entity));
+        const newTargets = [
+            ...this.e.sources.filter(source => source.room == room), 
+            ...this.e.spawns.filter(spawn => spawn.room == room), 
+            room.controller
+        ].filter(entity => !this.zones.entries.some(zone => zone.name === "safe" && zone.target == entity));
 
-        const newZones = newTargets.map(target => {
-            const zone = this.zones.create("safe", {});
-            zone.generatePositions(target, target.structureType === STRUCTURE_CONTROLLER ? 2 : 1);
-            return zone;
-        });
-        this.zones.entries.push(...newZones);
+        newTargets.forEach(target => this.createZone("safe", { target, range: target.structureType === STRUCTURE_CONTROLLER ? 2 : 1 }));
     },
-    generateExitPositions: function() {
-        const newRooms = this.e.rooms.filter(room => this.getZones(room, "exits").length == 0);
-        const newZones = newRooms.map(target => {
-            const zone = this.zones.create("exits", {});
-            zone.generatePositions(target);
-            return zone;
-        });
-        this.zones.entries.push(...newZones);
+    generateExitPositions: function(room) {
+        if (this.getZones(room, "exits").length == 0) {
+            this.createZone("exits", { target: room });
+        }
+    },
+    isPositionValid: function(target) {
+        if (target.pos.x != undefined && target.pos.y != undefined) {
+            return [target.pos.x, target.pos.y].every(x => x >= 0 && x <= 49);
+        }
+        return false;
     },
     getPosition: function(target, terrain) {
         if (terrain == undefined) {
             terrain = target.room.getTerrain();
         }
-        if (target.room.name != undefined && target.pos.x != undefined && target.pos.y != undefined) {
+        if (target.room.name != undefined && this.isPositionValid(target)) {
             let position = this.positions.entries.find(position => position.x === target.pos.x && position.y === target.pos.y && target.room.name === position.room.name);
             if (position == undefined) {
                 position = this.positions.create({ room: target.room, x: target.pos.x, y: target.pos.y, terrain: terrain.get(target.pos.x, target.pos.y) });
@@ -268,8 +264,7 @@ CommuteManager.prototype = {
                     y: pos[1]
                 },
                 room
-            }, terrain));
-
+            }, terrain)).filter(pos => pos);
         }
     },
     getExitPositions: function(room) {
@@ -282,11 +277,11 @@ CommuteManager.prototype = {
                 y: pos[1]
             },
             room
-        }, terrain));
+        }, terrain)).filter(pos => pos);
     },
-    recordPresence: function() {
+    recordPresence: function(room) {
         const terrain = {};
-        this.e.creeps.forEach(creep => {
+        this.e.creeps.filter(creep => creep.room == room).forEach(creep => {
             if (terrain[creep.room.name] == undefined) {
                 terrain[creep.room.name] = creep.room.getTerrain();
             }
@@ -302,15 +297,13 @@ CommuteManager.prototype = {
             position.attacks++;
         }
     },
-    handleRoadConstruction: function() {
-        this.e.rooms.forEach(room => {
-            if (this.e.constructionSites.find(x => x.structureType === STRUCTURE_ROAD && x.room.name === room.name) == undefined) {
-                const position = this.positions.entries.filter(x => !x.getOccupant() && x.presence > ROAD_BUILD_THRESHOLD).sort((a, b) => b.presence - a.presence).find(x => x);
-                if (position != undefined) {
-                    position.toRoomPosition().createConstructionSite(STRUCTURE_ROAD);
-                }
+    handleRoadConstruction: function(room) {
+        if (this.e.constructionSites.find(x => x.structureType === STRUCTURE_ROAD && x.room.name === room.name) == undefined) {
+            const position = this.positions.entries.filter(x => !x.getOccupant() && x.presence > ROAD_BUILD_THRESHOLD).sort((a, b) => b.presence - a.presence).find(x => x);
+            if (position != undefined) {
+                position.toRoomPosition().createConstructionSite(STRUCTURE_ROAD);
             }
-        });
+        }
     },
     positionInZone: function(position) {
         return this.zones.entries.find(zone => zone.getPositions().some(x => x.equals(position)));
@@ -332,29 +325,24 @@ CommuteManager.prototype = {
                     return structure != undefined && structure.structureType === structureType;
                 }
             }
-            const search = (results, orthogonal) => {
-                let addedResults = false;
-                do {
-                    addedResults = false;
-                    let resultsLength = results.length;
-                    results.forEach(item => {
-                        results.push(...new Array(orthogonal ? 4 : 8).fill(0)
-                            .map((_, i) => [[-1,1,0,0,-1,1,-1,1][i] + item.x, [0,0,-1,1,-1,-1,1,1][i] + item.y])
-                            .filter(pos => !results.some(val => val.x === pos[0] && val.y === pos[1]) && condition(pos))
-                            .map(pos => this.getPosition({
-                                pos : {
-                                    x: pos[0],
-                                    y: pos[1]
-                                },
-                                room: reference.room
-                            }, terrain))
-                            .filter(pos => !this.positionInZone(pos)));
-                        addedResults = addedResults || results.length != resultsLength; 
-                    });
-                } while(recursive && addedResults);
-                return results;
+            const search = (results, orthogonal, checkResults) => {
+                checkResults = checkResults || results;
+                let addedResults = [];
+                checkResults.forEach(item => {
+                    addedResults = new Array(orthogonal ? 4 : 8).fill(0)
+                        .map((_, i) => [[-1,1,0,0,-1,1,-1,1][i] + item[0], [0,0,-1,1,-1,-1,1,1][i] + item[1]])
+                        .filter(pos => !results.some(val => val[0] === pos[0] && val[1] === pos[1]) && condition(pos));
+                    results.push(...addedResults);
+                });
+                return (addedResults.length > 0 && recursive) ? search(results, orthogonal, addedResults) : results.map(pos => this.getPosition({
+                    pos: {
+                        x: pos[0],
+                        y: pos[1]
+                    },
+                    room: reference.room
+                }, terrain)).filter(position => position && !this.positionInZone(position));
             }
-            return search(target, orthogonal);
+            return search(target.map(position => [position.x, position.y]), orthogonal);
         }
     },
     getOpenPositionsByRange: function(target, range) {
@@ -377,7 +365,7 @@ CommuteManager.prototype = {
                         room: target.room,
                         pos: position
                     }, terrain);
-                    if (roomPosition.isBuildable() && !this.positionInZone(roomPosition)) {
+                    if (roomPosition && roomPosition.isBuildable() && !this.positionInZone(roomPosition)) {
                         positions.push(roomPosition);
                     }
                 }
@@ -389,7 +377,7 @@ CommuteManager.prototype = {
         let found = false;
         let ignorePositions = [];
         let closestPosition;
-        while(!found && ignorePositions < 200) {
+        while(!found && ignorePositions < 2500) {
             closestPosition = this.searchForClosest(target, 0, ignorePositions);
             if (!closestPosition.isBuildable()) {
                 ignorePositions.push(closestPosition);
@@ -419,7 +407,7 @@ CommuteManager.prototype = {
                         room: target.room,
                         pos: position
                     }, terrain);
-                    if (!this.positionInZone(roomPosition) && !ignorePositions.some(position => position.equals(roomPosition))) {
+                    if (roomPosition && !this.positionInZone(roomPosition) && !ignorePositions.some(position => position.equals(roomPosition))) {
                         if (typeof(structureType) === "number") {
                             if (roomPosition.terrain === structureType) {
                                 return roomPosition;

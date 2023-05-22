@@ -1,9 +1,6 @@
 const { Manager } = require("./manager");
 const { log } = require("./utils");
 
-// If the index is larger than the collection size times this value, reset the index.
-const INDEX_RESET_LIMIT = 3;
-
 function Entry(e, name, template, defaults, transient, properties) {
     this.e = e;
     this.name = name;
@@ -15,6 +12,12 @@ function Entry(e, name, template, defaults, transient, properties) {
     this.data = {};
     this.updateTransientData(this.transient);
 }
+
+// Number of elements in collection memory data that's unique.
+const DEDICATED_COLLECTION_SIZE = 3;
+
+// Number of elements within each data element that is unique
+const DEDICATED_ENTRY_SIZE = 2;
 
 Entry.prototype = {
     create: function (data, index) {
@@ -80,34 +83,38 @@ Entry.prototype = {
         });
     },
     refreshReferences: function() {
-        this.referenceProperties.forEach(key => {
-            this[key] = this.e.refreshEntity(this[key]);
-            this.data[key] = this[key];
+        Object.keys(this.data).forEach(key => {
+            if (this.e.isEntity(this[key])) {
+                this[key] = this.e.refreshEntity(this[key]);
+                this.data[key] = this[key];
+            }
         });
-        this.referenceProperties = [];
     },
     refreshState: function() {
         this.transientProperties = {};
         this.changed = false;
         Object.keys(this.data).forEach(key => {
+
+            // We don't care about functions.
             if (typeof(this[key] !== "function") && this[key] != this.data[key]) {
                 this.data[key] = this[key];
                 this.changed = true;
             }
-            if (this.e.isEntity(this.data[key])) {
-                this.referenceProperties.push(key);
-            }
         });
     },
-    fromMemory: function (index, idIndexes, ids, properties, data) {
+    fromMemory: function (data, index, properties, idIndexes) {
+        // Adjust id indexes to account for dedicated entry size
+        idIndexes = idIndexes.map(index => index - DEDICATED_ENTRY_SIZE);
         return this.create(properties.map((key, i) => ({
-            [key]: idIndexes.includes(i) ? this.e.getEntity(ids[data[i]]) : data[i]
+            [key]: idIndexes.includes(i) ? this.e.getEntity(Memory.ids[data[i]]) : data[i]
         })).reduce((a, b) => ({
             ...a,
             ...b
         }), {}), index);
     },
     toMemory: function (names, properties) {
+
+        // The number of elements before property data should be the same as DEDICATED_ENTRY_SIZE
         return [this.index, names.indexOf(this.name), ...properties.map(key => this.e.isEntity(this[key]) ? this.e.getId(this[key]) : this[key])];
     }
 }
@@ -128,6 +135,7 @@ MemoryManager.prototype = {
         if (Memory.collections == undefined) {
             Memory.collections = {};
         }
+        this.e.clear();
         const memory = Memory.collections;
         Object.keys(this.collections).forEach(key => {
             const collection = this.collections[key];
@@ -143,7 +151,7 @@ MemoryManager.prototype = {
                 const properties = collectionMemory[0];
                 const names = collectionMemory[1];
                 const idIndexes = collectionMemory[2];
-                const records = collectionMemory.slice(3);
+                const records = collectionMemory.slice(DEDICATED_COLLECTION_SIZE);
 
                 const newEntries = records.filter(record => !collection.entries.some(entry => entry.index == record[0])).map(record => {
                     const index = record[0];
@@ -152,10 +160,9 @@ MemoryManager.prototype = {
                     // Find and load entry.
                     const template = collection.templates[name];
                     if (template != undefined) {
-                        return template.fromMemory(index, idIndexes, Memory.ids, properties, record.slice(2));
+                        return template.fromMemory(record.slice(DEDICATED_ENTRY_SIZE), index, properties, idIndexes);
                     }
                 });
-
                 collection.entries.push(...newEntries);
             }
         });
@@ -175,17 +182,17 @@ MemoryManager.prototype = {
             let existingRecords = [];
             const entries = collection.entries;
 
+            // Mark all existing entries as stale if they haven't changed.
+            entries.forEach(entry => entry.refreshState());
+
             if (collectionMemory.length > 3) {
                 properties = collectionMemory[0].concat(properties).filter((x, i, a) => a.indexOf(x) === i);
                 names = collectionMemory[1].concat(names).filter((x, i, a) => a.indexOf(x) === i);
                 idIndexes = collectionMemory[2];
-                existingRecords = collectionMemory.splice(3);
+                existingRecords = collectionMemory.slice(DEDICATED_COLLECTION_SIZE).filter(record => entries.some(entry => entry.index == record[0] && !entry.changed));
             }
 
             if (entries != undefined && entries.length > 0) {
-
-                // Mark all existing entries as stale if they haven't changed.
-                entries.forEach(entry => entry.refreshState());
 
                 if (properties.length > 0) {
                     let index = Math.max(...existingRecords.map(entry => entry[0]).concat(0));
@@ -193,8 +200,6 @@ MemoryManager.prototype = {
                         entry.index = ++index;
                         entry.changed = true;
                     });
-
-                    const updateIndexes = index > entries.length * INDEX_RESET_LIMIT;
 
                     const updatedRecords = entries.filter(entry => entry.changed)
                         .map(entry => entry.toMemory(names, properties));
@@ -215,19 +220,16 @@ MemoryManager.prototype = {
                         }
                     }));
                     
-                    existingRecords = existingRecords.filter(record => !updatedRecords.some(updatedRecord => updatedRecord[0] == record[0]));
-                    let records = existingRecords.concat(updatedRecords);
+                    let records = existingRecords.filter(record => !updatedRecords.some(updatedRecord => updatedRecord[0] == record)).concat(updatedRecords);
 
-                    if (updateIndexes) {
-                        records = records.filter(record => entries.some(entry => record[0] === entry.index));
-                        records.forEach((record, i) => {
-                            entries.find(entry => entry.index === record[0]).index = i;
-                            record[0] = i;
-                        });
+                    // The number of elements before records should be the same as DEDICATED_COLLECTION_SIZE.
+                    if (existingRecords.length !== entries.length || updatedRecords.length > 0) {
+
+                        memory[key] = [properties, names, idIndexes, ...records];
                     }
-
-                    memory[key] = [properties, names, idIndexes, ...records];
                 }
+            } else {
+                delete memory[key];
             }
         });
         this.e.clear();
@@ -292,9 +294,6 @@ Collection.prototype = {
         return Object.values(this.templates).map(template => template.properties)
             .reduce((a, b) => a.concat(b), [])
             .filter((x, i, a) => a.indexOf(x) === i);
-    },
-    getIdIndexes: function() {
-
     }
 }
 

@@ -17,8 +17,6 @@ const DISABLE_PUBLIC_SPEAKING = true;
 
 // The order of this list determines execution order.
 const managerContainer = new ManagerContainer([
-    e,
-
     MemoryManager,
     CommuteManager,
     StructureManager,
@@ -27,7 +25,7 @@ const managerContainer = new ManagerContainer([
     SpawnManager,
     CombatManager,
     TaskManager
-]);
+], e);
 
 Creep.prototype._say = Creep.prototype.say;
 Creep.prototype.say = function(message, isPublic) {
@@ -37,7 +35,6 @@ Creep.prototype.say = function(message, isPublic) {
 }
 
 managerContainer.init();
-let usedCpu = 0;
 
 module.exports.loop = function() {
     try {
@@ -47,11 +44,7 @@ module.exports.loop = function() {
             MemoryManager.clear();
         }
         if (!DISABLE_RUNNING) {
-            if (usedCpu < Game.cpu.limit) {
-                managerContainer.run();
-            } else {
-                log("CPU Limit Reached", `${Math.round(usedCpu / Game.cpu.limit * 100)}%`);
-            }
+            managerContainer.run();
         }
         if(!DISABLE_MEMORY) {
             MemoryManager.save();
@@ -59,7 +52,5 @@ module.exports.loop = function() {
     } catch(exception) {
         MemoryManager.clear();
         throw exception;
-    } finally {
-        usedCpu = Game.cpu.getUsed();
     }
 };

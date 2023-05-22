@@ -49,18 +49,18 @@ TaskManager.prototype = {
             }
         });
     },
-    run: function() {
+    run: function(room) {
         this.tasks.entries = this.tasks.entries.sort((a, b) => b.priority - a.priority);
 
-        const vacantTasks = this.handleQueuedTasks();
-        vacantTasks.push(this.handleTriggeredTasks());
+        const vacantTasks = this.handleQueuedTasks(room);
+        vacantTasks.push(this.handleTriggeredTasks(room));
 
         if (vacantTasks.length > 0) {
             this.handleSpawning(vacantTasks);
         }
 
         this.handleIdleCreeps();
-        this.handleActiveTasks();
+        this.handleActiveTasks(room);
 
         this.tasks.entries = this.tasks.entries.filter(task => !task.checkIsComplete());
     },
@@ -68,14 +68,14 @@ TaskManager.prototype = {
         return this.e.creeps.filter(creep => this.e.exists(creep) && !creep.spawning && !this.tasks.entries.some(task => task.creep == creep))
             .sort((a, b) => b.body.length - a.body.length);
     },
-    handleQueuedTasks: function() {
-        let queuedTasks = this.queuedTasks();
+    handleQueuedTasks: function(room) {
+        let queuedTasks = this.queuedTasks(room);
         let idleCreeps = this.idleCreeps();
 
         this.findCreepForTasks(queuedTasks, idleCreeps);
 
         if (queuedTasks.length > 0) {
-            log("Remaining Tasks", queuedTasks.length, `[${queuedTasks.map(task => task.name).filter((x, i, a) => a.indexOf(x) === i).join(", ")}]`);
+            log("Remaining Tasks", room, queuedTasks.length, `[${queuedTasks.map(task => task.name).filter((x, i, a) => a.indexOf(x) === i).join(", ")}]`);
         } else {
             log("Idle Creeps", idleCreeps.length);
         }
@@ -100,8 +100,8 @@ TaskManager.prototype = {
 
         this.SpawnManager.requestCreep(vacantTasks);
     },
-    handleTriggeredTasks: function() {
-        const triggeredTasks = this.triggeredTasks();
+    handleTriggeredTasks: function(room) {
+        const triggeredTasks = this.triggeredTasks(room);
         const creeps = this.e.creeps.filter(creep => !triggeredTasks.some(task => task.creep == creep));
 
         // Unassign any triggered tasks that are no longer triggered.
@@ -146,8 +146,8 @@ TaskManager.prototype = {
             idleCreeps.forEach(creep => managers.some(manager => manager.requestWork(creep)));
         }
     },
-    handleActiveTasks: function() {
-        const activeTasks = this.activeTasks();
+    handleActiveTasks: function(room) {
+        const activeTasks = this.activeTasks(room);
         activeTasks.forEach((task, i) => {
             const isComplete = task.checkIsComplete()
             if (!isComplete && !task.meetsRequirements(task.creep)) {
@@ -206,20 +206,16 @@ TaskManager.prototype = {
     },
     meetsThreshold: function(task) {
         const zone = this.CommuteManager.getSafeZone(task.destination);
-        const result = zone == undefined ? !this.tasks.entries.some(x => x.name === task.name && task.destination == x.destination) : !zone.isFull();
-        if (result && zone) {
-            zone.reserveNextPosition();
-        }
-        return result;
+        return zone == undefined ? !this.tasks.entries.some(x => x.name === task.name && task.destination == x.destination) : !zone.isFull();
     },
-    triggeredTasks: function() {
-        return this.tasks.entries.filter(task => !this.e.exists(task.creep) && task.triggered);
+    triggeredTasks: function(room) {
+        return this.tasks.entries.filter(task => task.room == room).filter(task => !this.e.exists(task.creep) && task.triggered);
     },
-    queuedTasks: function() {
-        return this.tasks.entries.filter(task => !this.e.exists(task.creep) && !task.triggered);
+    queuedTasks: function(room) {
+        return this.tasks.entries.filter(task => task.destination.room == room).filter(task => !this.e.exists(task.creep) && !task.triggered);
     },
-    activeTasks: function() {
-        return this.tasks.entries.filter(task => this.e.exists(task.creep));
+    activeTasks: function(room) {
+        return this.tasks.entries.filter(task => task.destination.room == room).filter(task => this.e.exists(task.creep));
     }
 }
 

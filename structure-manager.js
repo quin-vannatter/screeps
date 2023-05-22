@@ -40,14 +40,14 @@ StructureManager.prototype = {
             }
         });
     },
-    run: function() {
+    run: function(room) {
 
         // Build construction sites.
-        this.e.constructionSites.forEach(constructionSite => 
+        this.e.constructionSites.filter(constructionSite => constructionSite.room == room).forEach(constructionSite => 
             this.TaskManager.getAndSubmitTask("buildStructure", { destination: constructionSite }));
 
         // Repair structures.
-        this.e.structures.filter(structure => (structure.hits / structure.hitsMax * 100) < REPAIR_THRESHOLD).forEach(structure => 
+        this.e.structures.filter(constructionSite => constructionSite.room == room).filter(structure => (structure.hits / structure.hitsMax * 100) < REPAIR_THRESHOLD).forEach(structure => 
             this.TaskManager.getAndSubmitTask("repairStructure", {destination: structure }));
 
     },
