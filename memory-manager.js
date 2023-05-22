@@ -182,7 +182,6 @@ MemoryManager.prototype = {
             let existingRecords = [];
             const entries = collection.entries;
 
-            // Mark all existing entries as stale if they haven't changed.
             entries.forEach(entry => entry.refreshState());
 
             if (collectionMemory.length > 3) {
@@ -220,7 +219,7 @@ MemoryManager.prototype = {
                         }
                     }));
                     
-                    let records = existingRecords.filter(record => !updatedRecords.some(updatedRecord => updatedRecord[0] == record)).concat(updatedRecords);
+                    let records = existingRecords.filter(record => !updatedRecords.some(updatedRecord => updatedRecord[0] == record[0])).concat(updatedRecords);
 
                     // The number of elements before records should be the same as DEDICATED_COLLECTION_SIZE.
                     if (existingRecords.length !== entries.length || updatedRecords.length > 0) {
