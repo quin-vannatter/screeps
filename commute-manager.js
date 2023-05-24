@@ -347,6 +347,7 @@ CommuteManager.prototype = {
     },
     getOpenPositionsByRange: function(target, range) {
         range = Math.max(Math.min(range || 1, 25), 1);
+        console.log(target);
         const terrain = target.room.getTerrain();
         const positions = [];
         for (let i = 1; i <= range; i++) {

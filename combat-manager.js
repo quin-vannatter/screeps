@@ -26,47 +26,42 @@ CombatManager.prototype = {
             }
         });
     },
-    run: function() {
+    run: function(room) {
         this.inCombat = this.e.rooms.map(room => [room.name, this.e.hostiles.some(hostile => hostile.room == room)]).reduce((a, b) => ({ ...a, [b[0]]: b[1] }), {});
-        this.handleTowers();
-        this.handleDefense();
+        this.handleTowers(room);
+        this.handleDefense(room);
     },
-    handleDefense: function() {
-        this.e.rooms.forEach(room => {
-            const defenderTasks = this.TaskManager.tasks.entries.filter(task => task.room == room && task.name === "defend");
-            const requiredDefenderCount = Math.max(MIN_DEFENDER_COUNT, this.e.hostiles.length);
-            if (defenderTasks.length < requiredDefenderCount) {
-                this.TaskManager.getAndSubmitTask("defend", { room, destination: room });
-            }
-        });
-
-        this.e.rooms.filter(room => this.inCombat[room.name]).forEach(room => {
+    handleDefense: function(room) {
+        const defenderTasks = this.TaskManager.tasks.entries.filter(task => task.room == room && task.name === "defend");
+        const requiredDefenderCount = Math.max(MIN_DEFENDER_COUNT, this.e.hostiles.length);
+        if (defenderTasks.length < requiredDefenderCount) {
+            this.TaskManager.getAndSubmitTask("defend", { room, destination: room });
+        }
+        if (this.inCombat[room.name]) {
             const hostiles = this.e.hostiles.filter(hostile => hostile.room == room).sort((a, b) => a.hits - b.hits);
             if (hostiles.length > 0) {
                 const hostile = hostiles[0];
                 this.TaskManager.tasks.entries.filter(task => task.name === "defend").forEach(task => task.destination = hostile);
             }
-        });
+        }
     },
-    handleTowers: function() {
-        this.e.rooms.forEach(room => {
-            const maxTowers = CONTROLLER_STRUCTURES[STRUCTURE_TOWER][room.controller.level];
-            if (maxTowers > 0) {
-                const currentTowers = this.e.structures.filter(structure => structure.room == room && structure.structureType == STRUCTURE_TOWER);
-                const currentConstructionSites = this.e.constructionSites.filter(constructionSite => constructionSite.room == room && constructionSite.structureType == STRUCTURE_TOWER);
-                if (currentTowers.length < maxTowers && currentConstructionSites.length == 0) {
-                    const buildPosition = this.CommuteManager.getHeatMapPosition(room, position => position.attacks);
-                    if (buildPosition != undefined) {
-                        const roomPosition = buildPosition.toRoomPosition();
-                        if (!currentTowers.some(tower => tower.pos.getRangeTo(roomPosition) < TOWER_DISTANCE_THRESHOLD)) {
-                            roomPosition.createConstructionSite(STRUCTURE_TOWER);
-                        }
+    handleTowers: function(room) {
+        const maxTowers = CONTROLLER_STRUCTURES[STRUCTURE_TOWER][room.controller.level];
+        if (maxTowers > 0) {
+            const currentTowers = this.e.structures.filter(structure => structure.room == room && structure.structureType == STRUCTURE_TOWER);
+            const currentConstructionSites = this.e.constructionSites.filter(constructionSite => constructionSite.room == room && constructionSite.structureType == STRUCTURE_TOWER);
+            if (currentTowers.length < maxTowers && currentConstructionSites.length == 0) {
+                const buildPosition = this.CommuteManager.getHeatMapPosition(room, position => position.attacks);
+                if (buildPosition != undefined) {
+                    const roomPosition = buildPosition.toRoomPosition();
+                    if (!currentTowers.some(tower => tower.pos.getRangeTo(roomPosition) < TOWER_DISTANCE_THRESHOLD)) {
+                        roomPosition.createConstructionSite(STRUCTURE_TOWER);
                     }
                 }
             }
-        });
+        }
 
-        this.e.structures.filter(structure => structure.structureType === STRUCTURE_TOWER).forEach(tower => {
+        this.e.structures.filter(structure => structure.room == room && structure.structureType === STRUCTURE_TOWER).forEach(tower => {
             const freeCapacity = tower.store.getFreeCapacity(RESOURCE_ENERGY);
 
             if (freeCapacity == null || freeCapacity > 0) {

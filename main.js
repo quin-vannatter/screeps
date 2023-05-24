@@ -10,10 +10,10 @@ const { e } = require("./entity-manager");
 const { CombatManager } = require("./combat-manager");
 const { log } = require("./utils");
 
-const DISABLE_RUNNING = false;
-const DISABLE_MEMORY = false;
-const DISABLE_SPEAKING = false;
-const DISABLE_PUBLIC_SPEAKING = true;
+const DISABLE_RUNNING = 0;
+const DISABLE_MEMORY = 0;
+const DISABLE_SPEAKING = 0;
+const DISABLE_PUBLIC_SPEAKING = 1;
 
 // The order of this list determines execution order.
 const managerContainer = new ManagerContainer([
@@ -34,6 +34,8 @@ Creep.prototype.say = function(message, isPublic) {
     }
 }
 
+let attemptLoad = false;
+
 managerContainer.init();
 
 module.exports.loop = function() {
@@ -49,8 +51,15 @@ module.exports.loop = function() {
         if(!DISABLE_MEMORY) {
             MemoryManager.save();
         }
+        attemptLoad = false
     } catch(exception) {
-        MemoryManager.clear();
+        try {
+            attemptLoad ? MemoryManager.clear() : MemoryManager.load();
+            attemptLoad = !attemptLoad;
+        } catch (exception) {
+            MemoryManager.clear();
+            throw exception
+        }
         throw exception;
     }
 };

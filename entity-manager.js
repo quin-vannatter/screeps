@@ -59,15 +59,20 @@ EntityManager.prototype = {
         return (entity != undefined && typeof(entity) === "object") && (ID_PATTERN.test(entity.id) || NAME_PATTERN.test(entity.name));
     },
     getEntity: function (id) {
+        if (id == undefined) {
+            return {};
+        }
         const isId = ID_PATTERN.test(id);
         let value = this.entityReferences[id];
         if (value == undefined) {
             value = !isId ? Game.rooms[id] : Game.getObjectById(id);
             if (value != undefined) {
                 this.entityReferences[id] = value;
+            } else {
+                return false;
             }
         }
-        return value != undefined ? value : {};
+        return value;
     },
     getId: function(entity) {
         return entity.id || entity.name;

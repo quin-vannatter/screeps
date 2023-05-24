@@ -85,10 +85,18 @@ Entry.prototype = {
     refreshReferences: function() {
         Object.keys(this.data).forEach(key => {
             if (this.e.isEntity(this[key])) {
-                this[key] = this.e.refreshEntity(this[key]);
-                this.data[key] = this[key];
+                const reference = this.e.refreshEntity(this[key]);
+                if (reference !== false) {
+                    this[key] = reference;
+                    this.data[key] = this[key];
+                } else {
+                    const index = Memory.ids.indexOf(this.e.getId(this[key]));
+                    Memory.ids[index] = -1;
+                    return false;
+                }
             }
         });
+        return true;
     },
     refreshState: function() {
         this.transientProperties = {};
@@ -104,9 +112,20 @@ Entry.prototype = {
     },
     fromMemory: function (data, index, properties, idIndexes) {
         // Adjust id indexes to account for dedicated entry size
-        idIndexes = idIndexes.map(index => index - DEDICATED_ENTRY_SIZE);
+        const references = idIndexes.map(index => index - DEDICATED_ENTRY_SIZE).map(index => {
+            const id = Memory.ids[data[index]];
+            const entity = id !== -1 ? this.e.getEntity(Memory.ids[data[index]]) : false;
+            if (entity === false) {
+                Memory.ids[data[index]] = -1;
+                return [index, false];
+            }
+            return [index, entity];
+        });
+        if (references.some(reference => reference[1] === false)) {
+            return;
+        }
         return this.create(properties.map((key, i) => ({
-            [key]: idIndexes.includes(i) ? this.e.getEntity(Memory.ids[data[i]]) : data[i]
+            [key]: references.some(ref => ref[0] == i) ? references.find(ref => ref[0] == i)[1] : data[i]
         })).reduce((a, b) => ({
             ...a,
             ...b
@@ -139,10 +158,6 @@ MemoryManager.prototype = {
         const memory = Memory.collections;
         Object.keys(this.collections).forEach(key => {
             const collection = this.collections[key];
-            if (collection.entries && collection.entries.length > 0) {
-                collection.entries.forEach(entry => entry.changed = false);
-                collection.entries.forEach(entry => entry.refreshReferences());
-            }
             if (memory[key] == undefined) {
                 memory[key] = [];
             }
@@ -162,8 +177,12 @@ MemoryManager.prototype = {
                     if (template != undefined) {
                         return template.fromMemory(record.slice(DEDICATED_ENTRY_SIZE), index, properties, idIndexes);
                     }
-                });
+                }).filter(entry => entry);
                 collection.entries.push(...newEntries);
+            }
+            if (collection.entries && collection.entries.length > 0) {
+                collection.entries.forEach(entry => entry.changed = false);
+                collection.entries = collection.entries.filter(entry => entry.refreshReferences());
             }
         });
     },
@@ -212,14 +231,20 @@ MemoryManager.prototype = {
                         if (this.e.isEntityId(record[index])) {
                             let mapIndex = Memory.ids.indexOf(record[index]);
                             if (mapIndex == -1) {
-                                mapIndex = Memory.ids.length;
-                                Memory.ids.push(record[index]);
+                                mapIndex = Memory.ids.indexOf(-1);
+                                if (mapIndex == -1) {
+                                    mapIndex = Memory.ids.length;
+                                    Memory.ids.push(record[index]);
+                                } else {
+                                    Memory.ids[mapIndex] = record[index];
+                                }
                             }
                             record[index] = mapIndex;
                         }
                     }));
                     
-                    let records = existingRecords.filter(record => !updatedRecords.some(updatedRecord => updatedRecord[0] == record[0])).concat(updatedRecords);
+                    let records = existingRecords.filter(record => !updatedRecords.some(updatedRecord => updatedRecord[0] == record[0])).concat(updatedRecords)
+                        .filter((x, i, a) => a.findIndex(y => y[0] == x[0]) == i);
 
                     // The number of elements before records should be the same as DEDICATED_COLLECTION_SIZE.
                     if (existingRecords.length !== entries.length || updatedRecords.length > 0) {
@@ -281,7 +306,7 @@ Collection.prototype = {
                 const transient = {
                     ...this.baseTransient,
                     ...(entry.transient || {})
-                }
+                };
                 this.templates[key] = new Entry(this.e, key, template, defaults, transient);
             }
         });
