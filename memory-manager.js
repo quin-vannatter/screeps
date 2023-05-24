@@ -83,6 +83,7 @@ Entry.prototype = {
         });
     },
     refreshReferences: function() {
+        let referenceRefreshed = true;
         Object.keys(this.data).forEach(key => {
             if (this.e.isEntity(this[key])) {
                 const reference = this.e.refreshEntity(this[key]);
@@ -92,11 +93,11 @@ Entry.prototype = {
                 } else {
                     const index = Memory.ids.indexOf(this.e.getId(this[key]));
                     Memory.ids[index] = -1;
-                    return false;
+                    referenceRefreshed = false;
                 }
             }
         });
-        return true;
+        return referenceRefreshed;
     },
     refreshState: function() {
         this.transientProperties = {};
@@ -248,7 +249,6 @@ MemoryManager.prototype = {
 
                     // The number of elements before records should be the same as DEDICATED_COLLECTION_SIZE.
                     if (existingRecords.length !== entries.length || updatedRecords.length > 0) {
-
                         memory[key] = [properties, names, idIndexes, ...records];
                     }
                 }
