@@ -16,14 +16,19 @@ CommuteManager.prototype = {
         this.positions = this.MemoryManager.register("positions", {
             template: {
                 equals: (self, value) => value.x === self.x && value.y === self.y && value.room.name === self.room.name,
-                toRoomPosition: self => {
-                    const roomPosition = new RoomPosition(self.x, self.y, self.room.name)
-                    roomPosition.room = self.room;
-                    return roomPosition;
+                toRoomObject: self => {
+
+                    const value = {
+                        room: self.room,
+                        pos: new RoomPosition(self.x, self.y, self.room.name)
+                    };
+                    value.toString = value.pos.toString;
+                    return value;
                 },
                 getOccupant: (self, ignoreRoads) => {
                     const structures = ignoreRoads ? this.e.nonRoadStructures : this.e.structures;
-                    return this.e.exists(self.creep) ? self.creep : structures.find(structure => structure.room.name === self.room.name && structure.pos.x == self.x && structure.pos.y == self.y)
+                    const entities = structures.concat(this.e.sources);
+                    return this.e.exists(self.creep) ? self.creep : entities.find(entity => entity.room === self.room && entity.pos.x == self.x && entity.pos.y == self.y)
                 },
                 occupy: (self, creep, range) => {
                     self.creep = creep;
@@ -106,7 +111,7 @@ CommuteManager.prototype = {
                                 const orthogonal = self.structureType === STRUCTURE_ROAD ? false : true;
                                 const baseBlock = this.getBlock(closestPosition, self.structureType, orthogonal);
                                 buildPositions = this.getBlock(baseBlock, 0, false, false).filter(position => position.terrain == 0);
-                                buildPositions =  buildPositions.sort((a, b) => a.toRoomPosition().getRangeTo(self.target) - b.toRoomPosition().getRangeTo(self.target));
+                                buildPositions =  buildPositions.sort((a, b) => a.toRoomObject().pos.getRangeTo(self.target) - b.toRoomObject().pos.getRangeTo(self.target));
                                 if (buildPositions.length > 0) {
                                     found = true;
                                 } else {
@@ -155,7 +160,7 @@ CommuteManager.prototype = {
     commuteCreeps: function() {
         this.positions.entries.filter(position => position.isCommuting()).forEach(position => {
             try {
-                position.creep.moveTo(position.toRoomPosition());
+                position.creep.moveTo(position.toRoomObject().pos);
             } catch {
                 position.vacate();
             }
@@ -277,7 +282,7 @@ CommuteManager.prototype = {
                     y: pos[1]
                 },
                 room
-            }, terrain)).filter(pos => pos);
+            }, terrain));
         }
     },
     getExitPositions: function(room) {
@@ -314,7 +319,7 @@ CommuteManager.prototype = {
         if (this.e.constructionSites.find(x => x.structureType === STRUCTURE_ROAD && x.room.name === room.name) == undefined) {
             const position = this.positions.entries.filter(x => !x.getOccupant() && x.presence > ROAD_BUILD_THRESHOLD).sort((a, b) => b.presence - a.presence).find(x => x);
             if (position != undefined) {
-                position.toRoomPosition().createConstructionSite(STRUCTURE_ROAD);
+                position.toRoomObject().pos.createConstructionSite(STRUCTURE_ROAD);
             }
         }
     },
@@ -392,6 +397,7 @@ CommuteManager.prototype = {
         let closestPosition;
         while(!found && ignorePositions < 2500) {
             closestPosition = this.searchForClosest(target, 0, ignorePositions);
+            console.log(JSON.stringify(closestPosition));
             if (!closestPosition.isBuildable()) {
                 ignorePositions.push(closestPosition);
             } else {

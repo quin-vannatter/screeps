@@ -55,9 +55,9 @@ CombatManager.prototype = {
             if (currentTowers.length < maxTowers && currentConstructionSites.length == 0) {
                 const buildPosition = this.CommuteManager.getHeatMapPosition(room, position => position.attacks);
                 if (buildPosition != undefined) {
-                    const roomPosition = buildPosition.toRoomPosition();
-                    if (!currentTowers.some(tower => tower.pos.getRangeTo(roomPosition) < TOWER_DISTANCE_THRESHOLD)) {
-                        roomPosition.createConstructionSite(STRUCTURE_TOWER);
+                    const roomObject = buildPosition.toRoomObject();
+                    if (!currentTowers.some(tower => tower.pos.getRangeTo(roomObject) < TOWER_DISTANCE_THRESHOLD)) {
+                        roomObject.pos.createConstructionSite(STRUCTURE_TOWER);
                     }
                 }
             }

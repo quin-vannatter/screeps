@@ -169,7 +169,7 @@ CreepManager.prototype = {
         }
 
         const exitZones = this.CommuteManager.getZones(creep.room, "exits");
-        const positions = exitZones.map(zone => zone.getPositions()).reduce((a, b) => a.concat(b), []).map(position => position.toRoomPosition());
+        const positions = exitZones.map(zone => zone.getPositions()).reduce((a, b) => a.concat(b), []).map(position => position.toRoomObject());
         if (positions.length > 0) {
             const randomExit = positions[Math.floor(Math.random() * positions.length)];
             const task = this.TaskManager.getTask("explore", { destination: randomExit, room: creep.room });

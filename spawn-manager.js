@@ -60,6 +60,7 @@ SpawnManager.prototype = {
     },
     run: function() {
         this.handleExtensions();
+        this.handleSpawns();
     },
     requestCreep: function (tasks) {
         const threshold = 100 - (100 * Math.pow(SPAWN_PERCENT_MODIFIER, this.e.creeps.length));
@@ -103,6 +104,21 @@ SpawnManager.prototype = {
         }
         return false;
     },
+    handleSpawns: function() {
+        const rooms = this.e.rooms.filter(room => room.controller && room.controller.my);
+        rooms.forEach(room => {
+            if (!this.e.spawns.some(spawn => spawn.room == room)) {
+                const constructionSites = this.e.constructionSites.filter(constructionSite => constructionSite.room == room && constructionSite.structureType === STRUCTURE_SPAWN);
+                if (constructionSites.length <= 0) {
+                    this.e.sources.filter(source => source.room == room).forEach(source => this.CommuteManager.getPosition(source));
+                    const buildPosition = this.CommuteManager.getHeatMapPosition(room, position => position.getOccupant() instanceof Source ? 1 : 0);
+                    if (buildPosition != undefined) {
+                        buildPosition.toRoomObject().pos.createConstructionSite(STRUCTURE_SPAWN);
+                    }
+                }
+            }
+        })
+    },
     handleExtensions: function() {
 
         // Create new extensions.
@@ -118,7 +134,7 @@ SpawnManager.prototype = {
         zones.forEach(zone => {
             const position = zone.getNextPosition();
             if (position && !constructionSites.some(x => x.pos.x == position.x && x.pos.y == position.y)) {
-                position.toRoomPosition().createConstructionSite(STRUCTURE_EXTENSION);
+                position.toRoomObject().pos.createConstructionSite(STRUCTURE_EXTENSION);
             }
         })
 

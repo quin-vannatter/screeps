@@ -40,7 +40,7 @@ StructureManager.prototype = {
             }
         });
     },
-    run: function(room) {
+    run: function() {
 
         // Build construction sites.
         this.e.constructionSites.forEach(constructionSite => 
@@ -59,33 +59,6 @@ StructureManager.prototype = {
             }
         });
         return false;
-    },
-    buildCloseTo: function(target, structureType) {
-        const room = target.room;
-        const roomTerrain = room.getTerrain();
-        const structures = this.e.structures.concat(this.e.constructionSites).filter(structure => structure.room === room);
-        const pos = target.pos;
-        let spotFound = false;
-        let range = 1;
-        let newPos = undefined;
-        while(!spotFound && range < 25) {
-            const size = 1 + (range * 2);
-            const start = [pos.x - range, pos.y - range];
-            for(let i = 0; i < size*size; i++) {
-                newPos = [start[0] + (i % size), start[1] + Math.floor(i / size)];
-                spotFound = newPos[0] < 50 && newPos[1] < 50 && roomTerrain.get(newPos[0], newPos[1]) != 1 && 
-                    !structures.some(structure => structure.pos.x == newPos[0] && structure.pos.y == newPos[1]);
-                if (spotFound) {
-                    break;
-                }
-            }
-            if (!spotFound) {
-                range++;
-            }
-        }
-        if (newPos != undefined) {
-            room.createConstructionSite(...newPos, structureType);
-        }
     }
 }
 

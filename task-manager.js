@@ -120,7 +120,7 @@ TaskManager.prototype = {
         creeps.forEach(creep => {
             const validTasks = tasks.filter(task => creep && task.hasBodyParts(creep));
             if (validTasks.length > 0) {
-                const task = validTasks.map(task => [task, task.destination.pos.getRangeTo(creep)])
+                const task = validTasks.map(task => [task, task.destination.pos ? task.destination.pos.getRangeTo(creep) : 0])
                     .sort((a, b) => a[1] - b[1]).map(x => x[0])
                     .find(task => task.meetsRequirements(creep));
     
