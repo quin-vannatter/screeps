@@ -58,8 +58,8 @@ SpawnManager.prototype = {
             }
         });
     },
-    run: function(room) {
-        this.handleExtensions(room);
+    run: function() {
+        this.handleExtensions();
     },
     requestCreep: function (tasks) {
         const threshold = 100 - (100 * Math.pow(SPAWN_PERCENT_MODIFIER, this.e.creeps.length));
@@ -103,11 +103,11 @@ SpawnManager.prototype = {
         }
         return false;
     },
-    handleExtensions: function(room) {
+    handleExtensions: function() {
 
         // Create new extensions.
-        const sources = this.e.sources.filter(source => source.room.name === room.name)
-        const constructionSites = this.e.constructionSites.filter(constructionSite => constructionSite.room.name == room.name);
+        const sources = this.e.sources;
+        const constructionSites = this.e.constructionSites;
         const zones = sources.map(source => {
             const zones = this.CommuteManager.getZones(source, "hug");
             if (zones.length == 0) {
@@ -123,7 +123,7 @@ SpawnManager.prototype = {
         })
 
         // Make sure extensions are full.
-        this.e.structures.filter(structure => structure.room == room && structure.structureType === STRUCTURE_EXTENSION)
+        this.e.structures.filter(structure => structure.structureType === STRUCTURE_EXTENSION)
             .filter(structure => {
                 const freeCapacity = structure.store.getFreeCapacity(RESOURCE_ENERGY);
                 return freeCapacity == null || freeCapacity > 0

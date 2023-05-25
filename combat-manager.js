@@ -26,10 +26,12 @@ CombatManager.prototype = {
             }
         });
     },
-    run: function(room) {
-        this.inCombat = this.e.rooms.map(room => [room.name, this.e.hostiles.some(hostile => hostile.room == room)]).reduce((a, b) => ({ ...a, [b[0]]: b[1] }), {});
-        this.handleTowers(room);
-        this.handleDefense(room);
+    run: function() {
+        this.e.rooms.forEach(room => {
+            this.inCombat = this.e.rooms.map(room => [room.name, this.e.hostiles.some(hostile => hostile.room == room)]).reduce((a, b) => ({ ...a, [b[0]]: b[1] }), {});
+            this.handleTowers(room);
+            this.handleDefense(room);
+        });
     },
     handleDefense: function(room) {
         const defenderTasks = this.TaskManager.tasks.entries.filter(task => task.room == room && task.name === "defend");

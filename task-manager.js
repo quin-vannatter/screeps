@@ -51,19 +51,19 @@ TaskManager.prototype = {
             }
         });
     },
-    run: function(room) {
+    run: function() {
         this.tasksAdded = 0;
         this.tasks.entries = this.tasks.entries.sort((a, b) => b.priority - a.priority);
 
-        const vacantTasks = this.handleQueuedTasks(room);
-        vacantTasks.push(this.handleTriggeredTasks(room));
+        const vacantTasks = this.handleQueuedTasks();
+        vacantTasks.push(...this.handleTriggeredTasks());
 
         if (vacantTasks.length > 0) {
             this.handleSpawning(vacantTasks);
         }
 
         this.handleIdleCreeps();
-        this.handleActiveTasks(room);
+        this.handleActiveTasks();
 
         this.tasks.entries = this.tasks.entries.filter(task => !task.checkIsComplete() && (task.triggered || this.e.exists(task.destination)));
     },
@@ -71,14 +71,14 @@ TaskManager.prototype = {
         return this.e.creeps.filter(creep => this.e.exists(creep) && !creep.spawning && !this.tasks.entries.some(task => task.creep == creep))
             .sort((a, b) => b.body.length - a.body.length);
     },
-    handleQueuedTasks: function(room) {
-        let queuedTasks = this.queuedTasks(room);
+    handleQueuedTasks: function() {
+        let queuedTasks = this.queuedTasks();
         let idleCreeps = this.idleCreeps();
 
         this.findCreepForTasks(queuedTasks, idleCreeps);
 
         if (queuedTasks.length > 0) {
-            log("Remaining Tasks", room, queuedTasks.length, `[${queuedTasks.map(task => task.name).filter((x, i, a) => a.indexOf(x) === i).join(", ")}]`);
+            log("Remaining Tasks", queuedTasks.length, `[${queuedTasks.map(task => task.name).filter((x, i, a) => a.indexOf(x) === i).join(", ")}]`);
         } else if(idleCreeps.length > 0) {
             log("Idle Creeps", idleCreeps.length);
         }
@@ -103,8 +103,8 @@ TaskManager.prototype = {
 
         this.SpawnManager.requestCreep(vacantTasks);
     },
-    handleTriggeredTasks: function(room) {
-        const triggeredTasks = this.triggeredTasks(room);
+    handleTriggeredTasks: function() {
+        const triggeredTasks = this.triggeredTasks();
         const creeps = this.e.creeps.filter(creep => !triggeredTasks.some(task => task.creep == creep));
 
         // Unassign any triggered tasks that are no longer triggered.
@@ -162,8 +162,8 @@ TaskManager.prototype = {
             idleCreeps.forEach(creep => managers.some(manager => manager.requestWork(creep)));
         }
     },
-    handleActiveTasks: function(room) {
-        const activeTasks = this.activeTasks(room);
+    handleActiveTasks: function() {
+        const activeTasks = this.activeTasks();
         activeTasks.forEach(task => {
             if (!this.e.exists(task.destination)) {
                 this.purgeTask(task);
@@ -239,14 +239,14 @@ TaskManager.prototype = {
         const zone = this.CommuteManager.getSafeZone(task.destination);
         return zone == undefined ? !this.tasks.entries.some(x => x.name === task.name && task.destination == x.destination) : !zone.isFull();
     },
-    triggeredTasks: function(room) {
-        return this.tasks.entries.filter(task => task.room == room).filter(task => !this.e.exists(task.creep) && task.triggered);
+    triggeredTasks: function() {
+        return this.tasks.entries.filter(task => !this.e.exists(task.creep) && task.triggered);
     },
-    queuedTasks: function(room) {
-        return this.tasks.entries.filter(task => task.destination.room == room).filter(task => !this.e.exists(task.creep) && !task.triggered);
+    queuedTasks: function() {
+        return this.tasks.entries.filter(task => !this.e.exists(task.creep) && !task.triggered);
     },
-    activeTasks: function(room) {
-        return this.tasks.entries.filter(task => task.destination.room == room).filter(task => this.e.exists(task.creep));
+    activeTasks: function() {
+        return this.tasks.entries.filter(task => this.e.exists(task.creep));
     }
 }
 

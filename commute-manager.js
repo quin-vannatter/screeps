@@ -142,13 +142,15 @@ CommuteManager.prototype = {
             }
         });
     },
-    run: function(room) {
-        this.recordPresence(room);
-        this.handleRoadConstruction(room);
-        this.generateSafeZones(room);
-        this.generateExitPositions(room);
-        this.commuteCreeps();
-        after(ZONE_UPDATE_FREQUENCY, () => this.updateZones(room));
+    run: function() {
+        this.e.rooms.forEach(room => {
+            this.recordPresence(room);
+            this.handleRoadConstruction(room);
+            this.generateSafeZones(room);
+            this.generateExitPositions(room);
+            this.commuteCreeps();
+            after(ZONE_UPDATE_FREQUENCY, () => this.updateZones(room));
+        });
     },
     commuteCreeps: function() {
         this.positions.entries.filter(position => position.isCommuting()).forEach(position => {

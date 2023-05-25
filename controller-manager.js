@@ -36,16 +36,18 @@ ControllerManager.prototype = {
             }
         });
     },
-    run: function(room) {
-        this.e.controllers.filter(controller => controller.room == room && controller.my).forEach(controller => this.TaskManager.getAndSubmitTask("updateController", { destination: controller }));
-        if (this.e.controllers.filter(controller => controller.my).length < Game.gcl.level) {
-            this.e.controllers.filter(controller => !controller.my)
-                .forEach(controller => {
-                    if (!this.TaskManager.tasks.entries.some(task => task.destination == controller && task.name === "claimController")) {
-                        this.TaskManager.getAndSubmitTask("claimController", { destination: controller });
-                    }
-                });
-        }
+    run: function() {
+        this.e.rooms.forEach(room => {
+            this.e.controllers.filter(controller => controller.room == room && controller.my).forEach(controller => this.TaskManager.getAndSubmitTask("updateController", { destination: controller }));
+            if (this.e.controllers.filter(controller => controller.my).length < Game.gcl.level) {
+                this.e.controllers.filter(controller => !controller.my)
+                    .forEach(controller => {
+                        if (!this.TaskManager.tasks.entries.some(task => task.destination == controller && task.name === "claimController")) {
+                            this.TaskManager.getAndSubmitTask("claimController", { destination: controller });
+                        }
+                    });
+            }
+        });
     },
     requestWork: function(creep) {
         this.e.controllers.forEach(controller => {

@@ -41,18 +41,12 @@ ManagerContainer.prototype = {
         this.roomIndex = 0;
     },
     run: function() {
-        const rooms = this.e.rooms;
-        let ranRoomCount = 0;
-        while(!cpuLimitReached() && ranRoomCount < rooms.length) {
-            this.managers.forEach(manager => {
-                manager.run(rooms[this.roomIndex % rooms.length]);
-                if (cpuLimitReached()) {
-                    return;
-                }
-            });
-            this.roomIndex = (this.roomIndex + 1) % rooms.length;
-            ranRoomCount++;
-        }
+        this.managers.forEach(manager => {
+            manager.run();
+            if (cpuLimitReached()) {
+                return;
+            }
+        });
     },
     getAll: function(caller) {
         return this.managers.filter(manager => manager != caller);
