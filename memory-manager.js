@@ -1,5 +1,5 @@
 const { Manager } = require("./manager");
-const { log } = require("./utils");
+const { log, after } = require("./utils");
 
 function Entry(e, name, template, defaults, transient, properties) {
     this.e = e;
@@ -18,6 +18,9 @@ const DEDICATED_COLLECTION_SIZE = 3;
 
 // Number of elements within each data element that is unique
 const DEDICATED_ENTRY_SIZE = 2;
+
+// Update existing ids to remove any ids that do not exist.
+const UPDATE_ID_FREQUENCY = 1000;
 
 Entry.prototype = {
     create: function (data, index) {
@@ -83,21 +86,29 @@ Entry.prototype = {
         });
     },
     refreshReferences: function() {
-        let referenceRefreshed = true;
-        Object.keys(this.data).forEach(key => {
-            if (this.e.isEntity(this[key])) {
-                const reference = this.e.refreshEntity(this[key]);
-                if (reference !== false) {
-                    this[key] = reference;
-                    this.data[key] = this[key];
-                } else {
-                    const index = Memory.ids.indexOf(this.e.getId(this[key]));
-                    Memory.ids[index] = -1;
-                    referenceRefreshed = false;
+
+        const updateReferences = (target, data) => {
+            Object.keys(data || {}).forEach(key => {
+                if (this.e.isEntity(target[key])) {
+                    const reference = this.e.refreshEntity(target[key]);
+                    if (reference !== false) {
+                        target[key] = reference;
+                        data[key] = reference;
+                    } else {
+                        const index = Memory.ids.indexOf(this.e.getId(target[key]));
+                        if (index != -1) {
+                            Memory.ids[index] = -1;
+                            target[key] = {};
+                            data[key] = {};
+                        }
+                    }
+                } else if(target[key] != undefined && typeof(target[key]) === "object") {
+                    updateReferences(target[key], data[key]);
                 }
-            }
-        });
-        return referenceRefreshed;
+            });
+        }
+
+        updateReferences(this, this.data);
     },
     refreshState: function() {
         this.transientProperties = {};
@@ -151,7 +162,15 @@ MemoryManager.prototype = {
         Memory.collections = {};
         Memory.ids = [];
     },
+    updateIds: function() {
+        Memory.ids.forEach((id, i) => {
+           if (this.e.getEntity(id) === false) {
+               Memory.ids[i] = -1;
+           } 
+        });
+    },
     load: function () {
+        after(UPDATE_ID_FREQUENCY, () => this.updateIds());
         if (Memory.collections == undefined) {
             Memory.collections = {};
         }
@@ -180,10 +199,11 @@ MemoryManager.prototype = {
                     }
                 }).filter(entry => entry);
                 collection.entries.push(...newEntries);
+                collection.entries = collection.entries.sort((a, b) => a.index - b.index);
             }
             if (collection.entries && collection.entries.length > 0) {
                 collection.entries.forEach(entry => entry.changed = false);
-                collection.entries = collection.entries.filter(entry => entry.refreshReferences());
+                collection.entries.forEach(entry => entry.refreshReferences());
             }
         });
     },

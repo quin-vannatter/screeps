@@ -34,8 +34,6 @@ Creep.prototype.say = function(message, isPublic) {
     }
 }
 
-let attemptLoad = false;
-
 managerContainer.init();
 
 module.exports.loop = function() {
@@ -51,15 +49,8 @@ module.exports.loop = function() {
         if(!DISABLE_MEMORY) {
             MemoryManager.save();
         }
-        attemptLoad = false
     } catch(exception) {
-        try {
-            attemptLoad ? MemoryManager.clear() : MemoryManager.load();
-            attemptLoad = !attemptLoad;
-        } catch (exception) {
-            MemoryManager.clear();
-            throw exception
-        }
+        MemoryManager.clear();
         throw exception;
     }
 };

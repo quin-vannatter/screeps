@@ -46,7 +46,7 @@ CombatManager.prototype = {
         }
     },
     handleTowers: function(room) {
-        const maxTowers = CONTROLLER_STRUCTURES[STRUCTURE_TOWER][room.controller.level];
+        const maxTowers = CONTROLLER_STRUCTURES[STRUCTURE_TOWER][room.controller ? room.controller.level : 0];
         if (maxTowers > 0) {
             const currentTowers = this.e.structures.filter(structure => structure.room == room && structure.structureType == STRUCTURE_TOWER);
             const currentConstructionSites = this.e.constructionSites.filter(constructionSite => constructionSite.room == room && constructionSite.structureType == STRUCTURE_TOWER);

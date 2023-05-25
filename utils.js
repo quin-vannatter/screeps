@@ -24,7 +24,7 @@ const fns = {
     cpuLimitReached: () => {
         const cpuUsed = Game.cpu.getUsed();
         const cpuTotal = Game.cpu.limit;
-        const reachedLimit = cpuUsed >= cpuTotal
+        const reachedLimit = cpuUsed >= cpuTotal;
         if (reachedLimit) {
             fns.log("CPU Limit Reached", `${Math.round(cpuUsed / cpuTotal * 100)}%`);
         }

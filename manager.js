@@ -45,7 +45,7 @@ ManagerContainer.prototype = {
         let ranRoomCount = 0;
         while(!cpuLimitReached() && ranRoomCount < rooms.length) {
             this.managers.forEach(manager => {
-                manager.run(rooms[this.roomIndex]);
+                manager.run(rooms[this.roomIndex % rooms.length]);
                 if (cpuLimitReached()) {
                     return;
                 }

@@ -10,7 +10,7 @@ function EntityManager(...services) {
 
     const entityMapping = {
         rooms: () => Object.values(Game.rooms),
-        structures: () => this.rooms.filter(room => room.controller.my).map(room => room.find(FIND_STRUCTURES)).reduce((a, b) => a.concat(b), []),
+        structures: () => this.rooms.filter(room => room.controller && room.controller.my).map(room => room.find(FIND_STRUCTURES)).reduce((a, b) => a.concat(b), []),
         nonRoadStructures: () => this.structures.filter(structure => structure.structureType !== STRUCTURE_ROAD),
         constructionSites: () => this.rooms.map(room => room.find(FIND_MY_CONSTRUCTION_SITES)).reduce((a, b) => a.concat(b), []),
         spawns: () => Object.values(Game.spawns),
@@ -18,7 +18,7 @@ function EntityManager(...services) {
         droppedResources: () => this.rooms.map(room => room.find(FIND_DROPPED_RESOURCES)).reduce((a, b) => a.concat(b), []),
         tombstones: () => this.rooms.map(room => room.find(FIND_TOMBSTONES)).reduce((a, b) => a.concat(b), []),
         creeps: () => Object.values(Game.creeps),
-        controllers: () => this.rooms.filter(room => room.controller && room.controller.my).map(room => room.controller).reduce((a, b) => a.concat(b), []),
+        controllers: () => this.rooms.map(room => room.controller).reduce((a, b) => a.concat(b), []),
         hostiles: () => this.rooms.map(room => [
             FIND_HOSTILE_CREEPS,
             FIND_HOSTILE_STRUCTURES,
@@ -50,7 +50,10 @@ function EntityManager(...services) {
 EntityManager.prototype = {
     ...Manager.prototype,
     exists: function (entity) {
-        return Object.keys(entity || {}).length > 0;
+        for (let _ in entity) {
+            return true;
+        }
+        return false;
     },
     isEntityId: function(id) {
         return ID_PATTERN.test(id) || NAME_PATTERN.test(id);

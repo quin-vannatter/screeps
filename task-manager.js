@@ -3,6 +3,7 @@ const { log, after } = require('./utils');
 
 const INCREASE_PRIORITY_FREQUENCY = 5;
 const INCREASE_SPAWN_PRIORITY_FREQUENCY = 2;
+const TASK_LIMIT = 5;
 
 // Task Manager. Should be loaded last so all tasks can be registered.
 function TaskManager() {
@@ -30,6 +31,7 @@ TaskManager.prototype = {
                 meetsRequirements: (self, creep) => self.hasBodyParts(creep) && self.canExecute(creep),
                 checkIsComplete: (self) => (!self.checkCreep || this.e.exists(self.creep)) && self.isComplete(),
                 canExecute: () => true,
+                execute: () => {},
                 onAssign: () => {},
                 isComplete: () => false,
                 range: 1,
@@ -50,6 +52,7 @@ TaskManager.prototype = {
         });
     },
     run: function(room) {
+        this.tasksAdded = 0;
         this.tasks.entries = this.tasks.entries.sort((a, b) => b.priority - a.priority);
 
         const vacantTasks = this.handleQueuedTasks(room);
@@ -62,7 +65,7 @@ TaskManager.prototype = {
         this.handleIdleCreeps();
         this.handleActiveTasks(room);
 
-        this.tasks.entries = this.tasks.entries.filter(task => !task.checkIsComplete());
+        this.tasks.entries = this.tasks.entries.filter(task => !task.checkIsComplete() && (task.triggered || this.e.exists(task.destination)));
     },
     idleCreeps: function() {
         return this.e.creeps.filter(creep => this.e.exists(creep) && !creep.spawning && !this.tasks.entries.some(task => task.creep == creep))
@@ -76,7 +79,7 @@ TaskManager.prototype = {
 
         if (queuedTasks.length > 0) {
             log("Remaining Tasks", room, queuedTasks.length, `[${queuedTasks.map(task => task.name).filter((x, i, a) => a.indexOf(x) === i).join(", ")}]`);
-        } else {
+        } else if(idleCreeps.length > 0) {
             log("Idle Creeps", idleCreeps.length);
         }
 
@@ -114,11 +117,24 @@ TaskManager.prototype = {
         return triggeredTasks.filter(task => !this.hasCreepsToAssign(task, creeps));
     },
     findCreepForTasks(tasks, creeps) {
-        tasks.forEach(task => {
+        creeps.forEach(creep => {
+            const validTasks = tasks.filter(task => creep && task.hasBodyParts(creep));
+            if (validTasks.length > 0) {
+                const task = validTasks.map(task => [task, task.destination.pos.getRangeTo(creep)])
+                    .sort((a, b) => a[1] - b[1]).map(x => x[0])
+                    .find(task => task.meetsRequirements(creep));
+    
+                if (task != undefined) {
+                    this.unassignCreep(creep);
+                    task.assign(creep);
+                    creeps[creeps.findIndex(x => x == creep)] = undefined;
+                }
+            }
+        });
+        tasks.filter(task => !this.e.exists(task.creep)).forEach(task => {
             const validCreeps = creeps.filter(creep => creep && task.hasBodyParts(creep));
             if (validCreeps.length > 0) {
-                
-                const creep = validCreeps.map(x => [x, x.pos.getRangeTo(task.destination)])
+                const creep = validCreeps.map(creep => [creep, creep.pos.getRangeTo(task.destination)])
                     .sort((a, b) => a[1] - b[1]).map(x => x[0])
                     .find(creep => task.meetsRequirements(creep));
     
@@ -148,29 +164,43 @@ TaskManager.prototype = {
     },
     handleActiveTasks: function(room) {
         const activeTasks = this.activeTasks(room);
-        activeTasks.forEach((task, i) => {
-            const isComplete = task.checkIsComplete()
-            if (!isComplete && !task.meetsRequirements(task.creep)) {
-                task.unassign();
-                this.CommuteManager.vacate(task.creep);
-            } else if (!isComplete) {
-                if (this.CommuteManager.canCommuteTo(task.destination, task.creep)) {
-                    this.CommuteManager.commuteTo(task.creep, task.destination);
-                } else if (!task.creep.pos.inRangeTo(task.destination, task.range)) {
-                    task.creep.moveTo(task.destination);
-                }
-                if (this.CommuteManager.commuteComplete(task.creep) || task.creep.pos.inRangeTo(task.destination, task.range)) {
-                    const result = task.execute();
-                    if(result != OK) {
-                        task.unassign();
-                        this.CommuteManager.vacate(task.creep);
+        activeTasks.forEach(task => {
+            if (!this.e.exists(task.destination)) {
+                this.purgeTask(task);
+            }
+            try {
+                const isComplete = task.checkIsComplete()
+                if (!isComplete && !task.meetsRequirements(task.creep)) {
+                    task.unassign();
+                    this.CommuteManager.vacate(task.creep);
+                } else if (!isComplete) {
+                    const commuting = this.CommuteManager.canCommuteTo(task.destination, task.creep);
+                    if (commuting) {
+                        this.CommuteManager.commuteTo(task.creep, task.destination);
+                    } else if (!task.creep.pos.inRangeTo(task.destination, task.range)) {
+                        task.creep.moveTo(task.destination);
                     }
+                    if (commuting ? this.CommuteManager.commuteComplete(task.creep) : task.creep.pos.inRangeTo(task.destination, task.range)) {
+                        const result = task.execute();
+                        if(result != OK) {
+                            this.purgeTask(task);
+                            this.CommuteManager.vacate(task.creep);
+                        }
+                    }
+                } else {
+                    this.CommuteManager.vacate(task.creep);
+                    task.creep.say("Complete", true);
                 }
-            } else {
-                this.CommuteManager.vacate(task.creep);
-                task.creep.say("Complete", true);
+            } catch {
+                this.purgeTask(task);
             }
         });
+    },
+    purgeTask: function(task) {
+        const index = this.tasks.entries.findIndex(entry => entry == task);
+        if (index != -1) {
+            this.tasks.entries.splice(index, 1);
+        }
     },
     unassignCreep: function(creep) {
         this.tasks.entries.filter(task => task.creep == creep && !task.triggered).forEach(task => task.unassign());
@@ -184,7 +214,8 @@ TaskManager.prototype = {
     submitTask: function(task, creep) {
         let created = false;
         if (task != undefined) {
-            if (this.meetsThreshold(task)) {
+            if (this.meetsThreshold(task) && this.tasksAdded < TASK_LIMIT) {
+                this.tasksAdded++;
                 if (creep && task.meetsRequirements(creep)) {
                     task.assign(creep);
                     this.tasks.entries.push(task);

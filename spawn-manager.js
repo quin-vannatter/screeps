@@ -111,7 +111,7 @@ SpawnManager.prototype = {
         const zones = sources.map(source => {
             const zones = this.CommuteManager.getZones(source, "hug");
             if (zones.length == 0) {
-                zones.push(this.CommuteManager.createZone("hug", { target: source, structureType: TERRAIN_MASK_WALL }));
+                zones.push(this.CommuteManager.createZone("hug", { target: source, structureType: TERRAIN_MASK_WALL, room: source.room }));
             }
             return zones;
         }).reduce((a, b) => a.concat(b), []).filter(x => x);
