@@ -91,15 +91,12 @@ Entry.prototype = {
             Object.keys(data || {}).forEach(key => {
                 if (this.e.isEntity(target[key])) {
                     const reference = this.e.refreshEntity(target[key]);
-                    if (reference !== false) {
-                        target[key] = reference;
-                        data[key] = reference;
-                    } else {
+                    target[key] = reference;
+                    data[key] = reference;
+                    if (!this.e.exists(reference)) {
                         const index = Memory.ids.indexOf(this.e.getId(target[key]));
                         if (index != -1) {
                             Memory.ids[index] = -1;
-                            target[key] = {};
-                            data[key] = {};
                         }
                     }
                 } else if(target[key] != undefined && typeof(target[key]) === "object") {
@@ -126,16 +123,12 @@ Entry.prototype = {
         // Adjust id indexes to account for dedicated entry size
         const references = idIndexes.map(index => index - DEDICATED_ENTRY_SIZE).map(index => {
             const id = Memory.ids[data[index]];
-            const entity = id !== -1 ? this.e.getEntity(Memory.ids[data[index]]) : false;
-            if (entity === false) {
+            const entity = id !== -1 ? this.e.getEntity(Memory.ids[data[index]]) : {};
+            if (entity === {}) {
                 Memory.ids[data[index]] = -1;
-                return [index, false];
             }
             return [index, entity];
         });
-        if (references.some(reference => reference[1] === false)) {
-            return;
-        }
         return this.create(properties.map((key, i) => ({
             [key]: references.some(ref => ref[0] == i) ? references.find(ref => ref[0] == i)[1] : data[i]
         })).reduce((a, b) => ({
@@ -161,6 +154,7 @@ MemoryManager.prototype = {
     clear: function () {
         Memory.collections = {};
         Memory.ids = [];
+        Object.values(this.collections).forEach(collection => collection.entities = []);
     },
     updateIds: function() {
         Memory.ids.forEach((id, i) => {
@@ -187,8 +181,9 @@ MemoryManager.prototype = {
                 const names = collectionMemory[1];
                 const idIndexes = collectionMemory[2];
                 const records = collectionMemory.slice(DEDICATED_COLLECTION_SIZE);
+                const indexes = collection.entries.map(entry => entry.index);
 
-                const newEntries = records.filter(record => !collection.entries.some(entry => entry.index == record[0])).map(record => {
+                const newEntries = records.filter(record => record && !indexes.includes(record[0])).map(record => {
                     const index = record[0];
                     const name = names[record[1]];
 
@@ -199,7 +194,6 @@ MemoryManager.prototype = {
                     }
                 }).filter(entry => entry);
                 collection.entries.push(...newEntries);
-                collection.entries = collection.entries.sort((a, b) => a.index - b.index);
             }
             if (collection.entries && collection.entries.length > 0) {
                 collection.entries.forEach(entry => entry.changed = false);
@@ -221,20 +215,33 @@ MemoryManager.prototype = {
             let idIndexes = [];
             let existingRecords = [];
             const entries = collection.entries;
+            let emptySpots = [];
 
             entries.forEach(entry => entry.refreshState());
+            const indexes = entries.filter(entry => !entry.changed).map(entry => entry.index);
 
             if (collectionMemory.length > 3) {
                 properties = collectionMemory[0].concat(properties).filter((x, i, a) => a.indexOf(x) === i);
                 names = collectionMemory[1].concat(names).filter((x, i, a) => a.indexOf(x) === i);
                 idIndexes = collectionMemory[2];
-                existingRecords = collectionMemory.slice(DEDICATED_COLLECTION_SIZE).filter(record => entries.some(entry => entry.index == record[0] && !entry.changed));
+                existingRecords = collectionMemory.slice(DEDICATED_COLLECTION_SIZE);
+                emptySpots = existingRecords.filter(record => record == undefined).map((_, i) => i);
+
+                // Remove any records missing from the entries.
+                collectionMemory.filter(record => record).forEach((record, i) => {
+                    if (i >= DEDICATED_COLLECTION_SIZE) {
+                        if (!indexes.includes(record[0])) {
+                            collectionMemory[i] = undefined;
+                            emptySpots.push(i);
+                        }
+                    }
+                });
             }
 
             if (entries != undefined && entries.length > 0) {
 
                 if (properties.length > 0) {
-                    let index = Math.max(...existingRecords.map(entry => entry[0]).concat(0));
+                    let index = Math.max(...existingRecords.filter(entry => entry).map(entry => entry[0]).concat(0));
                     entries.filter(entry => entry.index == -1).forEach(entry => {
                         entry.index = ++index;
                         entry.changed = true;
@@ -263,13 +270,19 @@ MemoryManager.prototype = {
                             record[index] = mapIndex;
                         }
                     }));
-                    
-                    let records = existingRecords.filter(record => !updatedRecords.some(updatedRecord => updatedRecord[0] == record[0])).concat(updatedRecords)
-                        .filter((x, i, a) => a.findIndex(y => y[0] == x[0]) == i);
 
                     // The number of elements before records should be the same as DEDICATED_COLLECTION_SIZE.
                     if (existingRecords.length !== entries.length || updatedRecords.length > 0) {
-                        memory[key] = [properties, names, idIndexes, ...records];
+                        memory[key][0] = properties;
+                        memory[key][1] = names;
+                        memory[key][2] = idIndexes;
+                        while(updatedRecords.length > 0) {
+                            if (emptySpots.length > 0) {
+                                memory[key][emptySpots.shift()] = updatedRecords.shift();
+                            } else {
+                                memory[key].push(updatedRecords.shift());
+                            }
+                        }
                     }
                 }
             } else {

@@ -51,6 +51,14 @@ StructureManager.prototype = {
             this.TaskManager.getAndSubmitTask("repairStructure", {destination: structure }));
 
     },
+    structureReachedLimit: function(room, structureType) {
+        if (CONTROLLER_STRUCTURES[structureType] && room.controller && room.controller.level) {
+            const limit = CONTROLLER_STRUCTURES[structureTypes][room.controller.level];
+            const count = this.e.structures.filter(structure => structure.room == room && structure.structureType === structureType);
+            return count >= limit;
+        }
+        return false;
+    },
     requestWork: function(creep) {
         this.e.constructionSites.forEach(constructionSite => {
             const task = this.TaskManager.getTask("buildStructure", { destination: constructionSite });

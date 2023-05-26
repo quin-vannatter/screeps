@@ -22,7 +22,7 @@ CommuteManager.prototype = {
                         room: self.room,
                         pos: new RoomPosition(self.x, self.y, self.room.name)
                     };
-                    value.toString = value.pos.toString;
+                    value.toString = () => value.pos.toString();
                     return value;
                 },
                 getOccupant: (self, ignoreRoads) => {
@@ -148,7 +148,7 @@ CommuteManager.prototype = {
         });
     },
     run: function() {
-        this.e.rooms.forEach(room => {
+        this.e.rooms.filter(room => room.controller && room.controller.my).forEach(room => {
             this.recordPresence(room);
             this.handleRoadConstruction(room);
             this.generateSafeZones(room);
@@ -257,7 +257,9 @@ CommuteManager.prototype = {
             let position = this.positions.entries.find(position => position.x === target.pos.x && position.y === target.pos.y && target.room.name === position.room.name);
             if (position == undefined) {
                 position = this.positions.create({ room: target.room, x: target.pos.x, y: target.pos.y, terrain: terrain.get(target.pos.x, target.pos.y) });
-                this.positions.entries.push(position);
+                if (position.terrain != 1) {
+                    this.positions.entries.push(position);
+                }
             }
             return position;
         }

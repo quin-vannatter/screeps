@@ -31,6 +31,15 @@ const USING_ROADS_THRESHOLD = 70;
 // Percentage threshold to wait until spawning.
 const SPAWN_PERCENT_MODIFIER = 0.9;
 
+const BODY_PART_MAPPING = [
+    WORK,
+    CARRY,
+    HEAL,
+    CLAIM,
+    ATTACK,
+    RANGED_ATTACK
+]
+
 function SpawnManager(...services) {
     Manager.call(this, SpawnManager.name, services);
 }
@@ -61,6 +70,10 @@ SpawnManager.prototype = {
     run: function() {
         this.handleExtensions();
         this.handleSpawns();
+        this.usingRoadsMap = this.e.rooms.filter(room => room.controller && room.controller.my).map(room => ({
+            room,
+            usingRoads: this.usingRoads(room)
+        }));
     },
     requestCreep: function (tasks) {
         const threshold = 100 - (100 * Math.pow(SPAWN_PERCENT_MODIFIER, this.e.creeps.length));
@@ -73,36 +86,49 @@ SpawnManager.prototype = {
     getBodyParts: function (tasks) {
         const bodyParts = tasks.map(task => task.bodyParts).reduce((a, b) => a.concat(b), []).filter(x => x);
         const results = [];
-        const bodyPartMap = Object.keys(BODYPART_COST);
         let i = 0;
         while(bodyParts.length > 0) {
-            const index = bodyParts.indexOf(bodyPartMap[i]);
+            const index = bodyParts.indexOf(BODY_PART_MAPPING[i]);
             if (index != -1) {
                 const value = bodyParts[index];
                 results.push(value);
                 bodyParts.splice(index, 1);
             }
-            i = ((i + 1) % bodyPartMap.length);
+            i = ((i + 1) % BODY_PART_MAPPING.length);
         }
         return results;
     },
     // Returns true if a creep can be spawned or if a spawn has the capacity to spawn a creep.
     requestCreepForTasks: function(bodyParts, spawns, threshold) {
-        if (spawns.length > 0) {
-            bodyParts = this.getRequiredBodyParts(bodyParts);
-            const creepCost = this.getCreepCost(bodyParts);
-            const validSpawn = spawns.find(spawn => spawn.room.energyAvailable >= creepCost && (spawn.room.energyAvailable / spawn.room.energyCapacityAvailable * 100) > threshold);
-            if (validSpawn != undefined) {
-                this.spawn(validSpawn, bodyParts);
-                return true;
-            } else {
-                const validSpawns = spawns.filter(spawn => spawn.room.energyCapacityAvailable >= creepCost);
-                if (validSpawns.length > 0) {
-                    validSpawns.forEach(validSpawn => this.TaskManager.getAndSubmitTask("depositEnergy", { destination: validSpawn }));
-                }
+        let found = false;
+        const spawnInfoEntries = spawns.map(spawn => {
+            const spawnBodyParts = this.getRequiredBodyParts(spawn.room, bodyParts);
+            return {
+                spawn,
+                creepCost: this.getCreepCost(spawnBodyParts),
+                bodyParts: spawnBodyParts
             }
+        });
+        if (spawns.length > 0) {
+            spawns.forEach(spawn => {
+                const spawnInfo = spawnInfoEntries.find(entry => entry.spawn == spawn);
+                if (spawn.room.energyCapacityAvailable >= spawnInfo.creepCost) {
+                    if (spawn.room.energyAvailable >= spawnInfo.creepCost && (spawn.room.energyAvailable / spawn.room.energyCapacityAvailable * 100) >= threshold) {
+                        this.spawn(spawn, spawnInfo.bodyParts);
+                        found = true;
+                    }
+                }
+            });
         }
-        return false;
+        if (!found) {
+            spawns.forEach(spawn => {
+                const creepCost = spawnInfoEntries.find(entry => entry.spawn == spawn).creepCost;
+                if (spawn.room.energyCapacityAvailable >= creepCost) {
+                    this.TaskManager.getAndSubmitTask("depositEnergy", { destination: spawn });
+                }
+            });
+        }
+        return found;
     },
     handleSpawns: function() {
         const rooms = this.e.rooms.filter(room => room.controller && room.controller.my);
@@ -122,21 +148,27 @@ SpawnManager.prototype = {
     handleExtensions: function() {
 
         // Create new extensions.
-        const sources = this.e.sources;
-        const constructionSites = this.e.constructionSites;
-        const zones = sources.map(source => {
-            const zones = this.CommuteManager.getZones(source, "hug");
-            if (zones.length == 0) {
-                zones.push(this.CommuteManager.createZone("hug", { target: source, structureType: TERRAIN_MASK_WALL, room: source.room }));
-            }
-            return zones;
-        }).reduce((a, b) => a.concat(b), []).filter(x => x);
-        zones.forEach(zone => {
-            const position = zone.getNextPosition();
-            if (position && !constructionSites.some(x => x.pos.x == position.x && x.pos.y == position.y)) {
-                position.toRoomObject().pos.createConstructionSite(STRUCTURE_EXTENSION);
-            }
-        })
+        this.e.rooms.filter(room => room.controller && room.controller.my && this.StructureManager.structureReachedLimit(room, STRUCTURE_EXTENSION)).forEach(room => {
+            this.e.sources.filter(source => source.room == room).forEach(source => {
+                const zones = this.CommuteManager.getZones(source, "hug");
+                if (zones.length > 0 && zones.some(zone => !zone.isFull())) {
+                    const openZones = zones.filter(zone => !zone.isFull());
+                    if (openZones.length > 0) {
+                        const constructionSites = this.e.constructionSites.filter(constructionSite => constructionSite.room == room && constructionSite.structureType == STRUCTURE_EXTENSION);
+                        if (!openZones.some(zone => zone.positions.some(pos => constructionSites.some(constructionSite => pos[0] == constructionSite.pos.x && pos[1] == constructionSite.pos.y)))) {
+                            const zone = openZones[0];
+                            zone.getNextPosition().toRoomObject().pos.createConstructionSite(STRUCTURE_EXTENSION);
+                        }
+                    }
+                } else if (zones.some(zone => !zone.isLocked)) {
+                    const lockedZones = zones.filter(zone => zone.isLocked);
+                    const structureTypes = [TERRAIN_MASK_WALL, STRUCTURE_ROAD].filter(structureType => !lockedZones.some(zone => zone.structureType === structureType));
+                    if (structureTypes.length > 0) {
+                        this.CommuteManager.createZone("hug", { target: source, structureType: structureTypes[0], room });
+                    }
+                }
+            });
+        });
 
         // Make sure extensions are full.
         this.e.structures.filter(structure => structure.structureType === STRUCTURE_EXTENSION)
@@ -155,8 +187,8 @@ SpawnManager.prototype = {
 
         return false;
     },
-    getRequiredBodyParts: function(bodyParts) {
-        return new Array(Math.ceil(bodyParts.length / (this.usingRoads ? 2 : 1)))
+    getRequiredBodyParts: function(room, bodyParts) {
+        return new Array(Math.ceil(bodyParts.length / (this.usingRoadsMap.find(entry => entry.room == room).usingRoads ? 2 : 1)))
             .fill(MOVE).concat(bodyParts);
     },
     spawn: function(spawn, bodyParts) {
@@ -185,13 +217,9 @@ SpawnManager.prototype = {
             log("Spawning Creep", name);
         }
     },
-    usingRoads: function() {
-        const presencePositions = this.CommuteManager.positions.filter(position => position.presence > 0);
-        const roadPositions = presencePositions.filter(position => {
-            const occupant = position.getOccupant();
-            return occupant != undefined && occupant.structureType === STRUCTURE_ROAD;
-        });
-
+    usingRoads: function(room) {
+        const presencePositions = this.CommuteManager.positions.entries.filter(position => position.presence > 0 && position.room == room).length;
+        const roadPositions = this.e.structures.filter(structure => structure.room == room && structure.structureType == STRUCTURE_ROAD).length;
         return (roadPositions / presencePositions * 100) > USING_ROADS_THRESHOLD;
     },
     recycleOrRenewAtClosestSpawn: function(creep) {

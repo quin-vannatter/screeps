@@ -1,5 +1,3 @@
-
-
 const CONSOLE_COLOURS = [
     "#ffb8b3",
     "#fffeb3",
@@ -9,6 +7,8 @@ const CONSOLE_COLOURS = [
     "#fcb3ff",
     "#ffb3d1",
 ];
+
+const LIMIT_TICK_PERCENTAGE = 50;
 
 const fns = {
     log: (...args) => {

@@ -27,7 +27,7 @@ CombatManager.prototype = {
         });
     },
     run: function() {
-        this.e.rooms.forEach(room => {
+        this.e.rooms.filter(room => room.controller && room.controller.my).forEach(room => {
             this.inCombat = this.e.rooms.map(room => [room.name, this.e.hostiles.some(hostile => hostile.room == room)]).reduce((a, b) => ({ ...a, [b[0]]: b[1] }), {});
             this.handleTowers(room);
             this.handleDefense(room);

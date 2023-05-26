@@ -39,7 +39,7 @@ function EntityManager(...services) {
                 const propName = `__${key}`;
                 if (this.props[propName] == undefined) {
                     this.props[propName] = entityMapping[key]();
-                    this.props[propName] = this.props[propName].map(entity => this.getEntity(entity.id || entity.name));
+                    this.props[propName] = this.props[propName].map(entity => entity ? this.getEntity(entity.id || entity.name) : {});
                 }
                 return this.props[propName];
             }
@@ -72,7 +72,7 @@ EntityManager.prototype = {
             if (value != undefined) {
                 this.entityReferences[id] = value;
             } else {
-                return false;
+                value = {};
             }
         }
         return value;

@@ -103,6 +103,7 @@ CreepManager.prototype = {
         });
     },
     run: function() {
+
         this.e.rooms.forEach(room => {
             // Check to see if there's resources on the ground somewhere.
             const droppedResources = this.e.droppedResources.concat(this.e.tombstones.filter(tombstone => tombstone.pos != undefined && tombstone.store[RESOURCE_ENERGY] > 0))
@@ -116,9 +117,6 @@ CreepManager.prototype = {
             this.creeps.entries.push(...this.e.creeps.filter(creep => !this.creeps.entries.some(x => x.creep == creep) && creep.my)
                 .map(creep => this.creeps.create({ creep, hits: creep.hits })));
 
-            // Record any attacks
-            this.creeps.entries.filter(entry => entry.hits > entry.creep.hits).forEach(entry => this.CommuteManager.recordAttack(entry.creep));
-
             // Update hits.
             this.creeps.entries.forEach(entry => entry.hits = entry.creep.hits);
 
@@ -130,6 +128,11 @@ CreepManager.prototype = {
                     entry.idleTicks = 0;
                 }
             });
+        });
+
+        this.e.rooms.filter(room => room.controller && room.controller.my).forEach(room => {
+            // Record any attacks
+            this.creeps.entries.filter(entry => entry.hits > entry.creep.hits && entry.creep.room == room).forEach(entry => this.CommuteManager.recordAttack(entry.creep));
         });
     },
     get: function(creep) {

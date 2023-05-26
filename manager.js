@@ -1,4 +1,4 @@
-const { cpuLimitReached } = require("./utils");
+const { cpuLimitReached, log } = require("./utils");
 
 // Manager.
 function Manager(name) {
@@ -31,6 +31,7 @@ function ManagerContainer(managers, e) {
     this.name = ManagerContainer.name;
     this.managers = managers;
     this.e = e;
+    this.limitWait = 0;
 }
 
 ManagerContainer.prototype = {
@@ -41,12 +42,23 @@ ManagerContainer.prototype = {
         this.roomIndex = 0;
     },
     run: function() {
-        this.managers.forEach(manager => {
-            manager.run();
-            if (cpuLimitReached()) {
-                return;
-            }
-        });
+        let limitReached = false;
+        if (this.limitWait <= 0) {
+            this.managers.forEach(manager => {
+                if (!limitReached) {
+                    manager.run();
+                } else {
+                    this.limitWait++;
+                }
+                if (limitReached) {
+                    limitReached = limitReached || cpuLimitReached();
+                }
+            });
+        }
+        if (this.limitWait > 0) {
+            log("Waiting", this.limitWait);
+        }
+        this.limitReached = Math.max(0, this.limitWait - 1);
     },
     getAll: function(caller) {
         return this.managers.filter(manager => manager != caller);

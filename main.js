@@ -8,12 +8,14 @@ const { MemoryManager } = require("./memory-manager");
 const { CommuteManager } = require("./commute-manager");
 const { e } = require("./entity-manager");
 const { CombatManager } = require("./combat-manager");
-const { log } = require("./utils");
+const { after, log } = require("./utils");
 
 const DISABLE_RUNNING = 0;
 const DISABLE_MEMORY = 0;
 const DISABLE_SPEAKING = 0;
 const DISABLE_PUBLIC_SPEAKING = 1;
+
+const SAVE_FREQUENCY = 10;
 
 // The order of this list determines execution order.
 const managerContainer = new ManagerContainer([
@@ -47,7 +49,7 @@ module.exports.loop = function() {
             managerContainer.run();
         }
         if(!DISABLE_MEMORY) {
-            MemoryManager.save();
+            after(SAVE_FREQUENCY, () => MemoryManager.save());
         }
     } catch(exception) {
         MemoryManager.clear();
