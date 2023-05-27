@@ -34,6 +34,7 @@ const SPAWN_PERCENT_MODIFIER = 0.9;
 const BODY_PART_MAPPING = [
     WORK,
     CARRY,
+    TOUGH,
     HEAL,
     CLAIM,
     ATTACK,

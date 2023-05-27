@@ -7,7 +7,7 @@ function CombatManager() {
 
 const TOWER_DISTANCE_THRESHOLD = 100;
 const REPAIR_THRESHOLD = 20;
-const MIN_DEFENDER_COUNT = 2;
+const MIN_DEFENDER_COUNT = 5;
 
 CombatManager.prototype = {
     ...Manager.prototype,
@@ -19,9 +19,37 @@ CombatManager.prototype = {
                     triggered: true,
                     triggerCondition: self => this.inCombat[self.room.name],
                     bodyParts: [
+                        TOUGH,
+                        TOUGH,
                         ATTACK
                     ],
-                    getMessage: () => "Attacking"
+                    getMessage: () => "Defend"
+                }
+            },
+            rangedDefend: {
+                template: {
+                    execute: self => self.creep.attack(self.destination),
+                    triggered: true,
+                    triggerCondition: self => this.inCombat[self.room.name],
+                    bodyParts: [
+                        TOUGH,
+                        TOUGH,
+                        RANGED_ATTACK
+                    ],
+                    getMessage: () => "Defend"
+                }
+            },
+            heal: {
+                template: {
+                    execute: self => self.creep.heal(self.destination),
+                    isComplete: self => self.destination.hits == self.destination.hitsMax,
+                    bodyParts: [
+                        HEAL
+                    ],
+                    getMessage: () => "Healing"
+                },
+                defaults: {
+                    priority: 3
                 }
             }
         });
@@ -34,17 +62,28 @@ CombatManager.prototype = {
         });
     },
     handleDefense: function(room) {
-        const defenderTasks = this.TaskManager.tasks.entries.filter(task => task.room == room && task.name === "defend");
+        const defenderTasks = this.TaskManager.tasks.entries.filter(task => task.room == room && ["defend", "rangedDefend"].includes(task.name));
         const requiredDefenderCount = Math.max(MIN_DEFENDER_COUNT, this.e.hostiles.length);
         if (defenderTasks.length < requiredDefenderCount) {
             this.TaskManager.getAndSubmitTask("defend", { room, destination: room });
+            this.TaskManager.getAndSubmitTask("rangedDefend", { room, destination: room });
         }
+
+        // Assign creeps to attackers.
         if (this.inCombat[room.name]) {
             const hostiles = this.e.hostiles.filter(hostile => hostile.room == room).sort((a, b) => a.hits - b.hits);
             if (hostiles.length > 0) {
                 const hostile = hostiles[0];
-                this.TaskManager.tasks.entries.filter(task => task.name === "defend").forEach(task => task.destination = hostile);
+                this.TaskManager.tasks.entries.filter(task => ["defend", "defendRanged"].includes(task.name)).forEach(task => task.destination = hostile);
             }
+        }
+
+        // Heal hurt creeps.
+        const hurtCreeps = this.e.creeps.filter(creep => creep.hits < creep.hitsMax);
+        const healerTasks = this.TaskManager.tasks.entries.filter(task => task.name === "heal");
+        const creeps = hurtCreeps.filter(creep => !healerTasks.some(task => task.creep == creep));
+        if (creeps.length > 0) {
+            creeps.forEach(creep => this.TaskManager.getAndSubmitTask("heal", { destination: creep }));
         }
     },
     handleTowers: function(room) {

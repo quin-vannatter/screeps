@@ -15,7 +15,7 @@ const DISABLE_MEMORY = 0;
 const DISABLE_SPEAKING = 0;
 const DISABLE_PUBLIC_SPEAKING = 1;
 
-const SAVE_FREQUENCY = 10;
+const SAVE_FREQUENCY = 1;
 
 // The order of this list determines execution order.
 const managerContainer = new ManagerContainer([

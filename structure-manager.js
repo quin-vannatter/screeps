@@ -53,7 +53,7 @@ StructureManager.prototype = {
     },
     structureReachedLimit: function(room, structureType) {
         if (CONTROLLER_STRUCTURES[structureType] && room.controller && room.controller.level) {
-            const limit = CONTROLLER_STRUCTURES[structureTypes][room.controller.level];
+            const limit = CONTROLLER_STRUCTURES[structureType][room.controller.level];
             const count = this.e.structures.filter(structure => structure.room == room && structure.structureType === structureType);
             return count >= limit;
         }
