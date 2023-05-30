@@ -71,7 +71,7 @@ SpawnManager.prototype = {
     run: function() {
         this.handleExtensions();
         this.handleSpawns();
-        this.usingRoadsMap = this.e.rooms.filter(room => room.controller && room.controller.my).map(room => ({
+        this.usingRoadsMap = this.e.rooms.map(room => ({
             room,
             usingRoads: this.usingRoads(room)
         }));

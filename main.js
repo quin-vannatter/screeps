@@ -48,9 +48,6 @@ module.exports.loop = function() {
         if (!DISABLE_RUNNING) {
             managerContainer.run();
         }
-        if(!DISABLE_MEMORY) {
-            after(SAVE_FREQUENCY, () => MemoryManager.save());
-        }
     } catch(exception) {
         MemoryManager.clear();
         throw exception;

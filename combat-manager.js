@@ -17,7 +17,7 @@ CombatManager.prototype = {
                 template: {
                     execute: self => self.creep.attack(self.destination),
                     triggered: true,
-                    triggerCondition: self => this.inCombat[self.room.name],
+                    triggerCondition: self => self.room && this.inCombat[self.room.name],
                     bodyParts: [
                         TOUGH,
                         TOUGH,
